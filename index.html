@@ -1,0 +1,3881 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>穿越要塞 - 太空射击游戏</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#EF4444',
+                        dark: '#0F172A',
+                        light: '#F8FAFC'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            }
+            .glow {
+                filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8));
+            }
+            .glow-red {
+                filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.8));
+            }
+        }
+    </style>
+    <style>
+        body {
+            overflow: hidden;
+            background-color: #0F172A;
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+        
+
+        canvas {
+            display: block;
+            background-color: #0F172A;
+        }
+        
+
+        .star {
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+            animation: twinkle 4s infinite ease-in-out;
+        }
+        
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.2; }
+            50% { opacity: 1; }
+        }
+        
+
+        .explosion {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background-image: radial-gradient(circle, #FF6B6B, #FFE66D, transparent);
+            border-radius: 50%;
+            animation: explode 0.5s forwards;
+        }
+        
+
+        @keyframes explode {
+            0% { transform: scale(0); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        
+
+        .game-over-overlay {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+        }
+        
+
+        .start-button {
+            transition: all 0.3s ease;
+        }
+        
+
+        .start-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.5);
+        }
+        
+
+        .restart-button {
+            transition: all 0.3s ease;
+        }
+        
+
+        .restart-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.5);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen">
+    <!-- 游戏容器 -->
+    <div class="relative w-full max-w-3xl">
+        <!-- 游戏标题 -->
+        <div class="absolute top-0 left-0 right-0 z-10 flex justify-center pt-4">
+            <h1 class="text-4xl font-bold text-white text-shadow">穿越要塞</h1>
+        </div>
+        
+        <!-- 计时器和分数 -->
+        <div class="absolute top-16 left-0 right-0 z-10 flex flex-col items-center gap-2">
+            <div class="flex justify-center gap-4">
+                <div id="timer" class="bg-dark/70 px-6 py-2 rounded-full border border-primary/50">
+                    <span class="text-xl font-bold text-white">时间: </span>
+                    <span id="time-display" class="text-xl font-bold text-primary">00:00</span>
+                </div>
+                <div id="score" class="bg-dark/70 px-6 py-2 rounded-full border border-secondary/50">
+                    <span class="text-xl font-bold text-white">分数: </span>
+                    <span id="score-display" class="text-xl font-bold text-secondary">0</span>
+                </div>
+            </div>
+            <div id="boss-countdown" class="hidden bg-dark/70 px-6 py-2 rounded-full border border-red-500/50">
+                <span class="text-xl font-bold text-red-500">Boss即将出现: 10秒</span>
+            </div>
+        </div>
+        
+        <!-- 游戏画布 -->
+        <canvas id="gameCanvas" class="w-full border-2 border-primary/30 rounded-lg shadow-lg shadow-primary/20"></canvas>
+        
+        <!-- 开始游戏界面 -->
+        <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center z-20">
+            <div class="bg-dark/80 p-8 rounded-xl border border-primary/50 shadow-xl max-w-md w-full">
+                <h2 class="text-3xl font-bold text-white text-center mb-6">准备起飞</h2>
+                <p class="text-light text-center mb-8">你是一个星际旅行者，误闯入宇宙海盗的要塞，使用鼠标控制你的飞船逃离这座要塞！</p>
+                <button id="start-button" class="start-button w-full py-3 px-6 bg-primary hover:bg-primary/80 text-white font-bold rounded-lg text-lg transition-all">
+                    开始游戏
+                </button>
+            </div>
+        </div>
+        
+        <!-- 游戏结束界面 -->
+        <div id="game-over-screen" class="absolute inset-0 game-over-overlay flex items-center justify-center z-20 hidden">
+            <div class="bg-dark/80 p-8 rounded-xl border border-secondary/50 shadow-xl max-w-md w-full">
+                <h2 class="text-3xl font-bold text-secondary text-center mb-4">游戏结束</h2>
+                <p class="text-light text-center mb-2">你的战机被摧毁了</p>
+                <p class="text-xl text-center mb-3">生存时间: <span id="final-time" class="font-bold text-secondary">00:00</span></p>
+                <p class="text-xl text-center mb-6">获得分数: <span id="final-score" class="font-bold text-primary">0</span></p>
+                <button id="restart-button" class="restart-button w-full py-3 px-6 bg-secondary hover:bg-secondary/80 text-white font-bold rounded-lg text-lg transition-all">
+                    重新开始
+                </button>
+            </div>
+        </div>
+        
+        <!-- 操作提示 -->
+        <div class="absolute bottom-4 left-0 right-0 z-10 flex justify-center">
+            <div class="bg-dark/70 px-4 py-2 rounded-full text-sm text-white/80">
+                <i class="fa fa-mouse-pointer mr-2"></i>鼠标控制移动
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 游戏变量
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let gameRunning = false;
+        let gameTime = 0;
+        let score = 0; // 积分系统
+        let gameTimer;
+        let animationFrameId = null; // 游戏循环动画帧ID
+        let lastEnemySpawn = 0;
+        let lastPlayerShot = 0;
+        let lastEnemyShot = {}; // 每个敌人独立的射击冷却时间
+        let lastPowerupSpawn = 0;
+        const POWERUP_SPAWN_INTERVAL = 10; // 每10秒生成一个道具
+        
+        // Boss战相关变量
+        let bossActive = false;
+        let bossHealth = 0;
+        let bossMaxHealth = 30; // 第一次Boss血量提升为30点
+        let bossStartTime = 0;
+        let bossFightTriggered = false; // 标记Boss战是否已触发
+        let bossFightRound = 0; // Boss战轮数
+        let nextBossTime = 30; // 下次Boss出现时间（秒）
+        let bossSkillCooldown = 4000; // Boss技能冷却时间（毫秒）
+        let bossLastSkillTime = 0; // 上次使用技能的时间
+        let bossHealthThresholds = {
+            oneThird: false,
+            twoThirds: false
+        }; // Boss血量阈值标记
+        let bossBulletMultiplier = 1; // Boss子弹倍数
+        let bossEnemySpawnCount = 3; // Boss战时每10秒刷新的敌机数量（初始3架）
+        let lastBossEnemySpawn = 0; // 上次Boss战时刷新敌机的时间
+        let lastScoreReward = 0; // 上次获得积分奖励的分数
+        let playerEnergy = 0; // 玩家能量值
+        let baseMaxPlayerEnergy = 10; // 基础最大能量值
+        let maxPlayerEnergy = baseMaxPlayerEnergy; // 当前最大能量值
+        
+        // 玩家升级系统
+        let playerLevel = 1; // 玩家等级
+        let playerHealth = 3; // 初始血量3点
+        let maxPlayerHealth = 3; // 最大血量
+        let bulletDamage = 1; // 基础炮弹伤害
+        let bulletCount = 1; // 基础炮弹数量
+        
+        // 护盾系统
+        let playerShield = 2; // 初始护盾值
+        let maxPlayerShield = 2; // 最大护盾值
+        let shieldCooldown = 0; // 护盾冷却时间
+        const SHIELD_COOLDOWN_TIME = 5; // 护盾冷却时间5秒
+        // 升级时间常量已移除，现在通过击败Boss获得升级机会
+        let upgradeTimesReached = []; // 已达到的升级时间点
+        let upgradePending = false; // 是否有待处理的升级
+        
+        // 敌人类型配置
+        const enemyTypes = {
+            normal: {
+                name: '普通敌人',
+                width: 60,
+                height: 60,
+                speed: 2 * 0.7, // 敌人移动速度降低到原来的70%
+                maxSpeed: 4 * 0.7,
+                shotCooldown: 1, // 每1秒发射一枚炮弹
+                health: 1,
+                score: 1,
+                spawnChance: 0.8 // 80%概率
+            },
+            level1: {
+                name: '一级战机',
+                width: 70,
+                height: 70,
+                speed: 1.5 * 0.7, // 敌人移动速度降低到原来的70%
+                maxSpeed: 3.5 * 0.7,
+                shotCooldown: 5, // 每5秒发起一次攻击（增加2秒）
+                health: 3,
+                score: 5,
+                spawnChance: 0.15, // 15%概率
+                burstFire: true, // 爆发射击
+                burstCount: 3, // 一次攻击发射3发炮弹（减少2发）
+                burstInterval: 0.1 // 炮弹间隔0.1秒
+            },
+            level2: {
+                name: '二级战机',
+                width: 75,
+                height: 75,
+                speed: 1.2 * 0.7, // 敌人移动速度降低到原来的70%
+                maxSpeed: 3 * 0.7,
+                shotCooldown: 1, // 每1秒发射一枚子弹
+                health: 3,
+                score: 3,
+                spawnChance: 0.05 // 5%概率
+            }
+        };
+        
+        // 计时器和分数显示
+        const timer = document.getElementById('timer');
+        const timeDisplay = document.getElementById('time-display');
+        const scoreDisplay = document.getElementById('score-display');
+        
+        // 设置画布尺寸
+        function resizeCanvas() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = 600;
+        }
+        
+
+        // 初始化时调整画布尺寸
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // 游戏对象
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 80,
+            width: 60,
+            height: 60,
+            speed: 5,
+            image: new Image()
+        };
+        
+        player.image.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/0e843e7d6fd14acd8b3a1451e3eae8d3~tplv-a9rns2rl98-image.image?rcl=202511272122369B85975E2E8095B3068F&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766841797&x-signature=3sQvrTBvIi%2FDFUnE0vtn%2B5qk3ak%3D';
+        
+        // 敌人图片
+        const enemyImages = {
+            normal: new Image(),
+            level1: new Image(),
+            level2: new Image()
+        };
+        
+        enemyImages.normal.src = 'https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/f9008ea1050944af862287d765833c21~tplv-a9rns2rl98-image.image?rcl=202511261348375B890A355B6213408CE8&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766728172&x-signature=wAEg%2BL14FOGv%2FcXyfAifA60X5JA%3D';
+        enemyImages.level1.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/e3145ff87b3040d79642f2d975161f12~tplv-a9rns2rl98-image.image?rcl=20251126143757C0870D179E8B1B934C69&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766731087&x-signature=S8eL72Dg3E9F%2FpxIAXDM6joOVcM%3D';
+        enemyImages.level2.src = 'https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/b48bc914d2b64af2a4e740a94e0640b9~tplv-a9rns2rl98-image.image?rcl=20251126143757C0870D179E8B1B934C69&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766731088&x-signature=rb4vVJl5RtOF6efuAolXaTIuOfw%3D';
+        
+        // Boss母舰图片
+        const bossImage = new Image();
+        bossImage.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/b32178c1290c449fb9bc0e251cfb5d09~tplv-a9rns2rl98-image.image?rcl=20251127214620BCFACFD6A652B051D543&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766843200&x-signature=Y8dChjrzalyKK1zKZO6GL%2B8YuQs%3D';
+        
+        const backgroundImage = new Image();
+        backgroundImage.src = 'https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/119ba10dccbe4ab7b2a5119859822b3f~tplv-a9rns2rl98-image.image?rcl=202511261348375B890A355B6213408CE8&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766728142&x-signature=p31zveG39z5oJW2QMYGqP9GV%2Fn8%3D';
+        
+        // 初始化子弹图片
+        const playerBulletImage = new Image();
+        playerBulletImage.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/c9127ec5921f4d19923424f8201fef4b~tplv-a9rns2rl98-image.image?rcl=202511272129148A5BD89A91F2E2561F98&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766842186&x-signature=gvkHqpP7a25q6cLpgG1C6HKG1jg%3D';
+        
+        // 初始化敌方子弹图片
+        const enemyBulletImage = new Image();
+        enemyBulletImage.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/830fa2b608534074a295d4bcd2088ad3~tplv-a9rns2rl98-image.image?rcl=20251127213714B0EFAE178538EF9DF826&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766842652&x-signature=4%2BFx01AHB7rvlGHE6%2BhOj7OuaIY%3D';
+        
+        let enemies = [];
+        let playerBullets = [];
+        let enemyBullets = [];
+        let explosions = [];
+        let powerups = [];
+        
+        // 玩家状态
+        let playerPowerup = {
+            active: false,
+            type: null, // 'double', 'laser', 'diagonal', 'shield', 'rapid', 'blackhole', 'energy'
+            startTime: 0,
+            duration: 5 // 5秒持续时间
+        };
+        
+        // 敌人数量控制
+        let maxEnemyCount = 7; // 初始最大敌人数量
+        const ENEMY_COUNT_INCREASE_INTERVAL = 90; // 每90秒增加一次
+        const ENEMY_COUNT_INCREASE = 3; // 每次增加3个敌人
+        let lastEnemyCountIncrease = 0; // 上次增加敌人数量的时间
+        
+        // 无敌状态
+        let invincibility = {
+            active: false,
+            startTime: 0,
+            duration: 0
+        };
+        
+        // 升级选项
+        const upgradeOptions = [
+            {
+                id: 'energy',
+                name: '能源核心',
+                description: '血量上限+1',
+                icon: 'fa-bolt',
+                color: '#F59E0B' // 橙色
+            },
+            {
+                id: 'damage',
+                name: '杀戮炮弹',
+                description: '每发炮弹伤害+1',
+                icon: 'fa-crosshairs',
+                color: '#EF4444' // 红色
+            },
+            {
+                id: 'armament',
+                name: '武装强化',
+                description: '额外增加一发炮弹',
+                icon: 'fa-plus-circle',
+                color: '#3B82F6' // 蓝色
+            }
+        ];
+        
+        // 护盾状态
+        let shield = {
+            active: false,
+            x: 0,
+            y: 0,
+            radius: 0
+        };
+        
+        // 激光效果
+        let laser = {
+            active: false,
+            x: 0,
+            width: 30,
+            height: canvas.height
+        };
+        
+        // 道具图片
+        const doubleShotImage = new Image();
+        doubleShotImage.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/6d0cf7c399674b86a2ffe36765553fbc~tplv-a9rns2rl98-image.image?rcl=202511261348375B890A355B6213408CE8&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766728185&x-signature=OKKRLibdCJ7bIbOr%2B3o%2BqASZ5Rk%3D';
+        
+        const laserImage = new Image();
+        laserImage.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/f6932d06b9ab42cd940eeb2de6836547~tplv-a9rns2rl98-image.image?rcl=202511261348375B890A355B6213408CE8&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766728185&x-signature=up2z1mefDf3i9xF%2FXwgslYthAIE%3D';
+        
+        const diagonalShotImage = new Image();
+        diagonalShotImage.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/87f6cee2a6894a8894bd48d5c65ef9e2~tplv-a9rns2rl98-image.image?rcl=202511261348375B890A355B6213408CE8&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766728185&x-signature=VcN3HXxbVQltY8mrBGxx5zopUUs%3D';
+        
+        // 新道具图片
+        const shieldImage = new Image();
+        shieldImage.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/080b9d24fc6045fe852567e71a4d0ea7~tplv-a9rns2rl98-image.image?rcl=202511261402198443F624D7E055C3F1AD&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766728955&x-signature=TeGJc4NGOqAv6U81MwDruVnigig%3D';
+        
+        const rapidFireImage = new Image();
+        rapidFireImage.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/1354da51572f436aba5f2c9075fbf128~tplv-a9rns2rl98-image.image?rcl=202511261402198443F624D7E055C3F1AD&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766728978&x-signature=RHTNWrWIn5AlG0YWK5rI5xv045I%3D';
+        
+        const blackholeImage = new Image();
+        blackholeImage.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/c5494e1e2d674addbb01b93fbf8194de~tplv-a9rns2rl98-image.image?rcl=202511261402198443F624D7E055C3F1AD&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766728994&x-signature=X%2FpmZL55PzG0opy7yrru2E%2FkZGo%3D';
+        
+        // 备用能源道具图片
+        const energyImage = new Image();
+        energyImage.src = 'https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/53356c66b1c34129853e13d126753b08~tplv-a9rns2rl98-image.image?rcl=20251126182835A6FA43C278004701F7E5&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1766744944&x-signature=oCQHxySdm3p291thbACZuewqcW8%3D';
+        
+        // 鼠标位置跟踪
+        let mouseX = canvas.width / 2;
+        let mouseY = canvas.height / 2;
+        
+        // 鼠标移动事件
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+        });
+        
+        // 创建星星背景
+        function createStars() {
+            const starsContainer = document.body;
+            
+            // 清除现有星星
+            const existingStars = document.querySelectorAll('.star');
+            existingStars.forEach(star => star.remove());
+            
+            // 创建新星星
+            for (let i = 0; i < 50; i++) {
+                const star = document.createElement('div');
+                star.classList.add('star');
+                
+                // 随机大小和位置
+                const size = Math.random() * 3 + 1;
+                const x = Math.random() * window.innerWidth;
+                const y = Math.random() * window.innerHeight;
+                const delay = Math.random() * 4;
+                
+                star.style.width = `${size}px`;
+                star.style.height = `${size}px`;
+                star.style.left = `${x}px`;
+                star.style.top = `${y}px`;
+                star.style.animationDelay = `${delay}s`;
+                
+                starsContainer.appendChild(star);
+            }
+        }
+        
+
+        // 创建爆炸效果
+        function createExplosion(x, y) {
+            const explosion = document.createElement('div');
+            explosion.classList.add('explosion');
+            explosion.style.left = `${x}px`;
+            explosion.style.top = `${y}px`;
+            
+            document.body.appendChild(explosion);
+            
+            // 动画结束后移除爆炸元素
+            setTimeout(() => {
+                explosion.remove();
+            }, 500);
+        }
+        
+
+        // 检测位置是否与现有对象重叠
+        function isPositionValid(x, y, width, height, existingObjects) {
+            const margin = 20; // 安全距离
+            
+            for (let obj of existingObjects) {
+                if (
+                    x < obj.x + obj.width + margin &&
+                    x + width + margin > obj.x &&
+                    y < obj.y + obj.height + margin &&
+                    y + height + margin > obj.y
+                ) {
+                    return false; // 位置重叠
+                }
+            }
+            
+            return true; // 位置有效
+        }
+        
+
+        // 生成特定类型的敌人
+        function spawnSpecificEnemy(enemyType) {
+            // 检查是否已达到最大敌人数量
+            if (enemies.length >= maxEnemyCount) {
+                return;
+            }
+            
+            // 获取选中类型的配置
+            const config = enemyTypes[enemyType];
+            
+            // 尝试找到一个不与道具重叠的位置
+            let validPosition = false;
+            let x = 0;
+            let attempts = 0;
+            const maxAttempts = 10;
+            
+            while (!validPosition && attempts < maxAttempts) {
+                x = Math.random() * (canvas.width - config.width);
+                validPosition = isPositionValid(x, -config.height, config.width, config.height, powerups);
+                attempts++;
+            }
+            
+            // 创建敌人对象
+            const enemy = {
+                x: x,
+                y: -config.height,
+                width: config.width,
+                height: config.height,
+                speed: config.speed + Math.random() * (config.maxSpeed - config.speed),
+                shotCooldown: config.shotCooldown,
+                health: config.health,
+                score: config.score,
+                type: enemyType,
+                burstFire: config.burstFire || false,
+                burstCount: config.burstCount || 1,
+                burstInterval: config.burstInterval || 0,
+                burstRemaining: 0,
+                burstTimer: 0
+            };
+            
+            // 初始化该敌人的射击冷却时间
+            lastEnemyShot[enemies.length] = 0;
+            
+            enemies.push(enemy);
+        }
+        
+
+        // 生成敌人
+        function spawnEnemy() {
+            // 检查是否已达到最大敌人数量
+            if (enemies.length >= maxEnemyCount) {
+                return;
+            }
+            
+            // 根据概率选择敌人类型
+            const rand = Math.random();
+            let enemyType;
+            
+            if (rand < enemyTypes.normal.spawnChance) {
+                enemyType = 'normal';
+            } else if (rand < enemyTypes.normal.spawnChance + enemyTypes.level1.spawnChance) {
+                enemyType = 'level1';
+            } else {
+                enemyType = 'level2';
+            }
+            
+            // 获取选中类型的配置
+            const config = enemyTypes[enemyType];
+            
+            // 尝试找到一个不与道具重叠的位置
+            let validPosition = false;
+            let x = 0;
+            let attempts = 0;
+            const maxAttempts = 10;
+            
+            while (!validPosition && attempts < maxAttempts) {
+                x = Math.random() * (canvas.width - config.width);
+                validPosition = isPositionValid(x, -config.height, config.width, config.height, powerups);
+                attempts++;
+            }
+            
+            // 创建敌人对象
+            const enemy = {
+                x: x,
+                y: -config.height,
+                width: config.width,
+                height: config.height,
+                speed: config.speed + Math.random() * (config.maxSpeed - config.speed),
+                shotCooldown: config.shotCooldown,
+                health: config.health,
+                score: config.score,
+                type: enemyType,
+                burstFire: config.burstFire || false,
+                burstCount: config.burstCount || 1,
+                burstInterval: config.burstInterval || 0,
+                burstRemaining: 0,
+                burstTimer: 0
+            };
+            
+            // 初始化该敌人的射击冷却时间
+            lastEnemyShot[enemies.length] = 0;
+            
+            enemies.push(enemy);
+        }
+        
+
+        // 玩家射击
+        function playerShoot() {
+            if (playerPowerup.active && playerPowerup.type === 'laser') {
+                // 激光模式
+                laser.active = true;
+                laser.x = player.x + player.width / 2 - laser.width / 2;
+                return;
+            }
+            
+            // 黑洞导弹不影响正常射击，保持原有逻辑
+            
+            if (playerPowerup.active && playerPowerup.type === 'double') {
+                // 备用炮弹模式 + 升级加成
+                const baseBullets = bulletCount;
+                const spacing = player.width / (baseBullets + 1);
+                
+                for (let i = 1; i <= baseBullets; i++) {
+                    // 主炮弹
+                    const mainBullet = {
+                        x: player.x + spacing * i - 4,
+                        y: player.y,
+                        width: 8,
+                        height: 16,
+                        speed: 8
+                    };
+                    
+                    // 额外炮弹（备用炮弹效果）
+                    const extraBullet = {
+                        x: player.x + spacing * i - 4,
+                        y: player.y + 6, // 稍微靠下一点
+                        width: 8,
+                        height: 16,
+                        speed: 7, // 速度稍慢
+                        extra: true // 标记为额外炮弹
+                    };
+                    
+                    playerBullets.push(mainBullet);
+                    playerBullets.push(extraBullet);
+                }
+            } else if (playerPowerup.active && playerPowerup.type === 'diagonal') {
+                // 斜向炮模式 + 升级加成
+                const baseBullets = bulletCount;
+                const spacing = player.width / (baseBullets + 1);
+                
+                for (let i = 1; i <= baseBullets; i++) {
+                    // 前方子弹
+                    const bullet1 = {
+                        x: player.x + spacing * i - 4,
+                        y: player.y,
+                        width: 8,
+                        height: 16,
+                        speed: 8
+                    };
+                    
+                    // 左侧45度子弹
+                    const bullet2 = {
+                        x: player.x + spacing * i - 4,
+                        y: player.y,
+                        width: 8,
+                        height: 16,
+                        speedX: -4, // 向左
+                        speedY: -8, // 向上
+                        diagonal: true
+                    };
+                    
+                    // 右侧45度子弹
+                    const bullet3 = {
+                        x: player.x + spacing * i - 4,
+                        y: player.y,
+                        width: 8,
+                        height: 16,
+                        speedX: 4, // 向右
+                        speedY: -8, // 向上
+                        diagonal: true
+                    };
+                    
+                    playerBullets.push(bullet1);
+                    playerBullets.push(bullet2);
+                    playerBullets.push(bullet3);
+                }
+            } else {
+                // 普通射击 + 升级加成
+                const baseBullets = bulletCount;
+                const spacing = player.width / (baseBullets + 1);
+                
+                for (let i = 1; i <= baseBullets; i++) {
+                    const bullet = {
+                        x: player.x + spacing * i - 4, // 调整位置使其居中
+                        y: player.y,
+                        width: 8,
+                        height: 16,
+                        speed: 8
+                    };
+                    
+                    playerBullets.push(bullet);
+                }
+            }
+        }
+        
+
+        // 敌人射击
+        function enemyShoot(enemy) {
+            if (enemy.type === 'level2') {
+                // 二级战机发射斜向子弹
+                const angle = Math.random() > 0.5 ? -45 : 45; // 左斜45度或右斜45度
+                const radians = angle * Math.PI / 180;
+                
+                const bullet = {
+                    x: enemy.x + enemy.width / 2 - 4,
+                    y: enemy.y + enemy.height,
+                    width: 8,
+                    height: 16,
+                    speedX: 6 * Math.sin(radians), // 水平速度
+                    speedY: 6 * Math.cos(radians), // 垂直速度
+                    diagonal: true
+                };
+                
+                enemyBullets.push(bullet);
+            } else if (enemy.type === 'level1' && enemy.burstFire) {
+                // 一级战机爆发射击
+                enemy.burstRemaining = enemy.burstCount;
+                enemy.burstTimer = 0;
+            } else {
+                // 普通敌人发射普通子弹
+                const bullet = {
+                    x: enemy.x + enemy.width / 2 - 4, // 调整位置使其居中
+                    y: enemy.y + enemy.height,
+                    width: 8,
+                    height: 16,
+                    speed: 6
+                };
+                
+                enemyBullets.push(bullet);
+            }
+        }
+        
+
+        // 检测碰撞
+        function checkCollision(obj1, obj2) {
+            return (
+                obj1.x < obj2.x + obj2.width &&
+                obj1.x + obj1.width > obj2.x &&
+                obj1.y < obj2.y + obj2.height &&
+                obj1.y + obj1.height > obj2.y
+            );
+        }
+        
+
+        // 更新游戏状态
+        function updateGame(deltaTime) {
+            // 游戏时间由setInterval统一管理，这里不再更新
+            // 只在需要时更新计时器显示（避免频繁DOM操作）
+            if (Math.floor(gameTime) !== Math.floor(gameTime - deltaTime)) {
+                updateTimer();
+            }
+            
+            // 检查无敌状态是否结束
+            updateInvincibility();
+            
+            // 检查是否需要升级
+            checkForUpgrades();
+            
+            // 敌人数量增加逻辑已移至升级后触发
+            
+            // 检测玩家子弹与Boss的碰撞
+            checkBulletBossCollision();
+            
+            // 检查积分奖励（每获得30点积分释放黑洞导弹并获得斜向攻击增益）
+            checkScoreReward();
+            
+            // 检查是否触发Boss战
+            if (Math.floor(gameTime) === nextBossTime && !bossFightTriggered) {
+                triggerBossFight();
+            }
+            
+            // 检查是否需要显示Boss战倒计时
+            if (!bossFightTriggered && Math.floor(gameTime) >= nextBossTime - 10) {
+                const bossCountdown = document.getElementById('boss-countdown');
+                if (bossCountdown) {
+                    bossCountdown.classList.remove('hidden');
+                    // 直接设置文本内容，避免querySelector可能返回null
+                    bossCountdown.textContent = `Boss即将出现: ${nextBossTime - Math.floor(gameTime)}秒`;
+                }
+            }
+            
+            // 更新Boss位置和行为
+            updateBoss();
+            
+            // 更新玩家位置（平滑跟随鼠标）
+            player.x += (mouseX - player.x) * 0.1;
+            player.y += (mouseY - player.y) * 0.1;
+            
+            // 限制玩家在画布内
+            player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+            player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
+            
+            // 玩家射击
+            const shootInterval = playerPowerup.active && playerPowerup.type === 'rapid' ? 0.25 : 0.5; // 强化机炮减少50%发射间隔
+            if (gameTime - lastPlayerShot > shootInterval) {
+                playerShoot();
+                lastPlayerShot = gameTime;
+            }
+            
+            // 生成敌人
+            if (!bossActive) {
+                // 普通模式下的敌人生成
+                const enemySpawnInterval = Math.max(1.5 - gameTime * 0.01, 0.8); // 敌人刷新速度减慢，从1.0-0.5秒调整到1.5-0.8秒
+                if (gameTime - lastEnemySpawn > enemySpawnInterval) {
+                    spawnEnemy();
+                    lastEnemySpawn = gameTime;
+                }
+            } else {
+                // Boss战时的敌人生成（每10秒刷新指定数量的普通敌机）
+                if (gameTime - lastBossEnemySpawn > 10) {
+                    // 刷新指定数量的普通敌机
+                    for (let i = 0; i < bossEnemySpawnCount; i++) {
+                        spawnSpecificEnemy('normal');
+                    }
+                    lastBossEnemySpawn = gameTime;
+                }
+            }
+            
+            // 生成道具
+            if (gameTime - lastPowerupSpawn > POWERUP_SPAWN_INTERVAL) {
+                spawnPowerup();
+                lastPowerupSpawn = gameTime;
+            }
+            
+            // 检查道具效果是否过期
+            if (playerPowerup.active && gameTime - playerPowerup.startTime > playerPowerup.duration) {
+                playerPowerup.active = false;
+                playerPowerup.type = null;
+                laser.active = false;
+                shield.active = false;
+            }
+            
+            // 更新护盾位置（跟随玩家）
+            if (shield.active) {
+                shield.x = player.x + player.width / 2;
+                shield.y = player.y + player.height / 2;
+            }
+            
+            // 更新敌人
+            enemies.forEach((enemy, enemyIndex) => {
+                enemy.y += enemy.speed;
+                
+                // 处理一级战机的爆发射击
+                if (enemy.type === 'level1' && enemy.burstRemaining > 0) {
+                    enemy.burstTimer += deltaTime;
+                    if (enemy.burstTimer >= enemy.burstInterval) {
+                        // 发射一枚炮弹
+                        const bullet = {
+                            x: enemy.x + enemy.width / 2 - 10 + (Math.random() - 0.5) * 30, // 稍微分散
+                            y: enemy.y + enemy.height,
+                            width: 20,
+                            height: 40,
+                            speed: 6 + Math.random() * 2 // 速度略有差异
+                        };
+                        
+                        enemyBullets.push(bullet);
+                        enemy.burstRemaining--;
+                        enemy.burstTimer = 0;
+                    }
+                }
+                // 敌人射击（每个敌人独立的射击冷却时间）
+                else if (gameTime - (lastEnemyShot[enemyIndex] || 0) > enemy.shotCooldown) {
+                    enemyShoot(enemy);
+                    lastEnemyShot[enemyIndex] = gameTime;
+                }
+                
+                // 移除超出屏幕的敌人
+                if (enemy.y > canvas.height) {
+                    enemies.splice(enemyIndex, 1);
+                    delete lastEnemyShot[enemyIndex];
+                }
+                
+                // 检测玩家与敌人的碰撞（护盾激活或无敌状态时忽略碰撞）
+                if (!shield.active && !invincibility.active && checkCollision(player, enemy)) {
+                    // 创建爆炸效果
+                    createExplosion(player.x + player.width / 2, player.y + player.height / 2);
+                    
+                    // 减少玩家血量
+                    playerHealth--;
+                    
+                    // 碰撞后移除敌人
+                    enemies.splice(enemyIndex, 1);
+                    delete lastEnemyShot[enemyIndex];
+                    
+                    // 检查游戏是否结束
+                    if (playerHealth <= 0) {
+                        gameOver();
+                    } else {
+                        // 播放受伤音效（如果有）
+                        // playSound('damage');
+                    }
+                }
+            });
+            
+            // 更新玩家子弹
+            playerBullets.forEach((bullet, bulletIndex) => {
+                if (bullet.diagonal) {
+                    // 斜向子弹
+                    bullet.x += bullet.speedX;
+                    bullet.y += bullet.speedY;
+                } else {
+                    // 普通子弹
+                    bullet.y -= bullet.speed;
+                }
+                
+                // 移除超出屏幕的子弹
+                if (bullet.y < -bullet.height || bullet.x < -bullet.width || bullet.x > canvas.width) {
+                    playerBullets.splice(bulletIndex, 1);
+                }
+                
+                // 检测子弹与敌人的碰撞
+                enemies.forEach((enemy, enemyIndex) => {
+                    if (checkCollision(bullet, enemy)) {
+                        // 减少敌人血量
+                        enemy.health -= bulletDamage;
+                        
+                        // 增加能量值（每次击中敌人获得1点能量）
+                        playerEnergy = Math.min(maxPlayerEnergy, playerEnergy + 1);
+                        
+                        // 检查能量是否满
+                        if (playerEnergy >= maxPlayerEnergy) {
+                            triggerEnergyBurst();
+                        }
+                        
+                        // 如果敌人血量为0，移除敌人并增加分数
+                        if (enemy.health <= 0) {
+                            // 创建爆炸效果
+                            createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+                            
+                            // 移除敌人并增加分数
+                            enemies.splice(enemyIndex, 1);
+                            delete lastEnemyShot[enemyIndex];
+                            score += enemy.score;
+                            scoreDisplay.textContent = score;
+                        } else {
+                            // 创建小型爆炸效果（击中但未摧毁）
+                            createExplosion(bullet.x + bullet.width / 2, bullet.y + bullet.height / 2);
+                        }
+                        
+                        // 如果不是激光，移除子弹
+                        if (!laser.active) {
+                            playerBullets.splice(bulletIndex, 1);
+                        }
+                        
+                        // 跳出循环，避免数组索引问题
+                        return;
+                    }
+                });
+            });
+            
+            // 激光效果检测
+            if (laser.active) {
+                enemies.forEach((enemy, enemyIndex) => {
+                    if (enemy.x < laser.x + laser.width && enemy.x + enemy.width > laser.x) {
+                        // 减少敌人血量
+                        enemy.health -= bulletDamage;
+                        
+                        // 增加能量值（每次击中敌人获得1点能量）
+                        playerEnergy = Math.min(maxPlayerEnergy, playerEnergy + 1);
+                        
+                        // 检查能量是否满
+                        if (playerEnergy >= maxPlayerEnergy) {
+                            triggerEnergyBurst();
+                        }
+                        
+                        // 如果敌人血量为0，移除敌人并增加分数
+                        if (enemy.health <= 0) {
+                            // 创建爆炸效果
+                            createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+                            
+                            // 移除敌人并增加分数
+                            enemies.splice(enemyIndex, 1);
+                            delete lastEnemyShot[enemyIndex];
+                            score += enemy.score;
+                            scoreDisplay.textContent = score;
+                        }
+                    }
+                });
+            }
+            
+            // 更新道具
+            powerups.forEach((powerup, powerupIndex) => {
+                powerup.y += powerup.speed;
+                
+                // 移除超出屏幕的道具
+                if (powerup.y > canvas.height) {
+                    powerups.splice(powerupIndex, 1);
+                }
+                
+                // 检测玩家与道具的碰撞
+                if (checkCollision(player, powerup)) {
+                    // 激活道具效果
+                    activatePowerup(powerup.type);
+                    
+                    // 如果是黑洞道具，2秒后发射黑洞导弹
+                    if (powerup.type === 'blackhole') {
+                        // 显示黑洞导弹即将发射的提示
+                        showBlackholeLaunchNotification();
+                        
+                        setTimeout(() => {
+                            if (gameRunning) {
+                                // 停止普通射击，发射黑洞导弹
+                                shootBlackhole();
+                            }
+                        }, 2000);
+                    }
+                    
+                    // 移除道具
+                    powerups.splice(powerupIndex, 1);
+                }
+            });
+            
+            // 更新黑洞导弹
+            blackholeMissiles.forEach((missile, missileIndex) => {
+                missile.y -= missile.speed;
+                
+                // 移除超出屏幕的导弹
+                if (missile.y < -missile.height) {
+                    blackholeMissiles.splice(missileIndex, 1);
+                    return;
+                }
+                
+                // 检测黑洞导弹与敌机的碰撞
+                enemies.forEach((enemy, enemyIndex) => {
+                    if (checkCollision(missile, enemy)) {
+                        // 激活黑洞效果
+                        activateBlackholeEffect(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+                        
+                        // 移除导弹
+                        blackholeMissiles.splice(missileIndex, 1);
+                        
+                        // 跳出循环
+                        return;
+                    }
+                });
+            });
+            
+            // 更新活跃的黑洞效果
+            updateBlackholes();
+            
+            // 更新敌人子弹
+            enemyBullets.forEach((bullet, bulletIndex) => {
+                if (bullet.diagonal) {
+                    // 斜向子弹
+                    bullet.x += bullet.speedX;
+                    bullet.y += bullet.speedY;
+                } else if (bullet.type === 'bounce') {
+                    // 反弹弹幕
+                    bullet.x += bullet.speedX;
+                    bullet.y += bullet.speedY;
+                    
+                    // 检测左右边界反弹
+                    if (!bullet.bounced && (bullet.x <= 0 || bullet.x + bullet.width >= canvas.width)) {
+                        bullet.speedX *= -1; // 反向X速度
+                        bullet.bounced = true; // 标记已反弹
+                        bullet.bounceCount++;
+                        
+                        // 确保子弹在边界内
+                        if (bullet.x <= 0) bullet.x = 0;
+                        if (bullet.x + bullet.width >= canvas.width) bullet.x = canvas.width - bullet.width;
+                    }
+                } else if (bullet.type === 'orbital') {
+                    // 轨道弹幕
+                    bullet.angle += bullet.orbitSpeed;
+                    bullet.radius += bullet.expandSpeed; // 缓慢扩大轨道
+                    
+                    // 计算新位置
+                    bullet.x = bullet.orbitCenterX + Math.cos(bullet.angle) * bullet.radius - bullet.width / 2;
+                    bullet.y = bullet.orbitCenterY + Math.sin(bullet.angle) * bullet.radius - bullet.height / 2;
+                    
+                    // 缓慢向下移动整个轨道
+                    bullet.orbitCenterY += 0.5;
+                } else {
+                    // 普通子弹
+                    bullet.y += bullet.speed;
+                }
+                
+                // 移除超出屏幕的子弹
+                if (bullet.y > canvas.height || bullet.x < -bullet.width || bullet.x > canvas.width) {
+                    enemyBullets.splice(bulletIndex, 1);
+                }
+                
+                // 检测子弹与玩家的碰撞（护盾激活或无敌状态时忽略碰撞）
+                if (!shield.active && !invincibility.active && checkCollision(bullet, player)) {
+                    // 创建爆炸效果
+                    createExplosion(player.x + player.width / 2, player.y + player.height / 2);
+                    
+                    // 移除子弹
+                    enemyBullets.splice(bulletIndex, 1);
+                    
+                    // 检查护盾系统
+                    if (playerShield > 0) {
+                        // 有护盾时，减少护盾值
+                        playerShield--;
+                        
+                        // 显示护盾破碎效果
+                        showShieldBreakEffect();
+                        
+                        // 开始护盾冷却
+                        shieldCooldown = SHIELD_COOLDOWN_TIME;
+                        
+                        // 如果所有护盾都破碎了，激活1秒无敌状态
+                        if (playerShield <= 0) {
+                            activateInvincibility(1); // 1秒无敌时间
+                        }
+                    } else {
+                        // 没有护盾时，减少玩家血量
+                        playerHealth--;
+                        
+                        // 检查游戏是否结束
+                        if (playerHealth <= 0) {
+                            gameOver();
+                        } else {
+                            // 播放受伤音效（如果有）
+                            // playSound('damage');
+                        }
+                    }
+                }
+            });
+        }
+        
+
+        // 绘制游戏
+        function drawGame() {
+            // 清空画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制背景
+            ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+            
+            // 绘制Boss
+            drawBoss();
+            
+            // 绘制玩家
+            ctx.drawImage(player.image, player.x, player.y, player.width, player.height);
+            
+            // 如果处于无敌状态，绘制无敌效果
+            if (invincibility.active) {
+                drawInvincibilityEffect();
+            }
+            
+            // 绘制玩家血量、能量条和护盾
+            drawPlayerHealth();
+            drawPlayerEnergy();
+            drawPlayerShield();
+            
+            // 绘制敌人
+            enemies.forEach(enemy => {
+                // 根据敌人类型选择不同的图片
+                ctx.drawImage(enemyImages[enemy.type], enemy.x, enemy.y, enemy.width, enemy.height);
+                
+                // 绘制血量条（对于血量大于1的敌人）
+                if (enemy.health > 1) {
+                    const healthBarWidth = enemy.width - 10;
+                    const healthBarHeight = 5;
+                    const healthBarX = enemy.x + 5;
+                    const healthBarY = enemy.y - 10;
+                    
+                    // 背景
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+                    
+                    // 血量
+                    const maxHealth = enemyTypes[enemy.type].health;
+                    const healthPercentage = enemy.health / maxHealth;
+                    ctx.fillStyle = healthPercentage > 0.5 ? '#10B981' : healthPercentage > 0.25 ? '#F59E0B' : '#EF4444';
+                    ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercentage, healthBarHeight);
+                }
+            });
+            
+            // 绘制玩家子弹
+            playerBullets.forEach(bullet => {
+                // 使用图片绘制子弹
+                ctx.drawImage(playerBulletImage, bullet.x, bullet.y, bullet.width, bullet.height);
+            });
+            
+            // 绘制敌人子弹
+            enemyBullets.forEach(bullet => {
+                // 使用图片绘制子弹，并翻转方向
+                ctx.save();
+                ctx.translate(bullet.x + bullet.width/2, bullet.y + bullet.height/2);
+                ctx.rotate(Math.PI); // 旋转180度
+                ctx.drawImage(enemyBulletImage, -bullet.width/2, -bullet.height/2, bullet.width, bullet.height);
+                ctx.restore();
+            });
+            
+            // 绘制激光
+            if (laser.active) {
+                ctx.fillStyle = 'rgba(147, 51, 234, 0.7)'; // 紫色激光
+                ctx.fillRect(laser.x, 0, laser.width, laser.height);
+                
+                // 添加发光效果
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = 'rgba(147, 51, 234, 0.8)';
+                ctx.fillRect(laser.x, 0, laser.width, laser.height);
+                ctx.shadowBlur = 0;
+            }
+            
+            // 绘制护盾
+            if (shield.active) {
+                ctx.beginPath();
+                ctx.arc(shield.x, shield.y, shield.radius, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(59, 130, 246, 0.3)'; // 半透明蓝色
+                ctx.fill();
+                
+                // 添加发光效果
+                ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = 'rgba(59, 130, 246, 0.8)';
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+            
+            // 绘制道具
+            powerups.forEach(powerup => {
+                ctx.drawImage(powerup.image, powerup.x, powerup.y, powerup.width, powerup.height);
+            });
+            
+            // 绘制黑洞导弹
+            blackholeMissiles.forEach(missile => {
+                ctx.drawImage(missile.image, missile.x, missile.y, missile.width, missile.height);
+            });
+            
+            // 绘制当前道具效果
+            if (playerPowerup.active) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(10, 10, 200, 40);
+                
+                ctx.fillStyle = 'white';
+                ctx.font = '16px Inter, sans-serif';
+                ctx.fillText('当前道具: ', 20, 35);
+                
+                let powerupName = '';
+                switch (playerPowerup.type) {
+                    case 'double':
+                        powerupName = '备用炮弹';
+                        ctx.fillStyle = '#3B82F6'; // 蓝色
+                        break;
+                    case 'laser':
+                        powerupName = '无尽激光';
+                        ctx.fillStyle = '#9333EA'; // 紫色
+                        break;
+                    case 'diagonal':
+                        powerupName = '斜向炮';
+                        ctx.fillStyle = '#10B981'; // 绿色
+                        break;
+                    case 'shield':
+                        powerupName = '超级护盾';
+                        ctx.fillStyle = '#60A5FA'; // 亮蓝色
+                        break;
+                    case 'rapid':
+                        powerupName = '强化机炮';
+                        ctx.fillStyle = '#F59E0B'; // 橙色
+                        break;
+                    case 'blackhole':
+                        powerupName = '空间黑洞';
+                        ctx.fillStyle = '#8B5CF6'; // 深紫色
+                        break;
+                }
+                
+                ctx.fillText(powerupName, 110, 35);
+                
+                // 绘制剩余时间
+                const remainingTime = Math.max(0, playerPowerup.duration - (gameTime - playerPowerup.startTime));
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.fillRect(20, 38, 180 * (remainingTime / playerPowerup.duration), 5);
+            }
+        }
+        
+
+        // 更新计时器显示
+        function updateTimer() {
+            const seconds = Math.floor(gameTime);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            
+            const timeString = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+            document.getElementById('time-display').textContent = timeString;
+            
+            // 更新Boss倒计时
+            if (!bossActive && !bossFightTriggered) {
+                const timeUntilBoss = Math.max(0, nextBossTime - Math.floor(gameTime));
+                if (timeUntilBoss <= 10 && timeUntilBoss > 0) {
+                    // 显示Boss即将出现的倒计时
+                    const bossCountdownElement = document.getElementById('boss-countdown');
+                    if (bossCountdownElement) {
+                        bossCountdownElement.textContent = `Boss即将出现: ${timeUntilBoss}秒`;
+                        bossCountdownElement.classList.remove('hidden');
+                    }
+                } else if (timeUntilBoss === 0) {
+                    // 隐藏倒计时
+                    const bossCountdownElement = document.getElementById('boss-countdown');
+                    if (bossCountdownElement) {
+                        bossCountdownElement.classList.add('hidden');
+                    }
+                }
+            }
+        }
+        
+
+        // 游戏循环
+        let lastTime = 0;
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+            
+            // 初始化lastTime
+            if (lastTime === 0) {
+                lastTime = timestamp;
+            }
+            
+            const deltaTime = (timestamp - lastTime) / 1000; // 转换为秒
+            lastTime = timestamp;
+            
+            // 确保deltaTime不会过大，防止时间跳跃
+            const cappedDeltaTime = Math.min(deltaTime, 0.1); // 限制最大时间增量为0.1秒
+            
+            updateGame(cappedDeltaTime);
+            updateShieldCooldown(cappedDeltaTime);
+            drawGame();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+
+        // 生成道具
+        function spawnPowerup() {
+            const types = ['double', 'laser', 'diagonal', 'shield', 'rapid', 'blackhole', 'energy'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            
+            let image;
+            switch (type) {
+                case 'double':
+                    image = doubleShotImage;
+                    break;
+                case 'laser':
+                    image = laserImage;
+                    break;
+                case 'diagonal':
+                    image = diagonalShotImage;
+                    break;
+                case 'shield':
+                    image = shieldImage;
+                    break;
+                case 'rapid':
+                    image = rapidFireImage;
+                    break;
+                case 'blackhole':
+                    image = blackholeImage;
+                    break;
+                case 'energy':
+                    image = energyImage;
+                    break;
+            }
+            
+            // 尝试找到一个不与敌人重叠的位置
+            let validPosition = false;
+            let x = 0;
+            let attempts = 0;
+            const maxAttempts = 10;
+            const powerupWidth = 40;
+            const powerupHeight = 40;
+            
+            while (!validPosition && attempts < maxAttempts) {
+                x = Math.random() * (canvas.width - powerupWidth);
+                validPosition = isPositionValid(x, -powerupHeight, powerupWidth, powerupHeight, enemies);
+                attempts++;
+            }
+            
+            const powerup = {
+                x: x,
+                y: -powerupHeight,
+                width: powerupWidth,
+                height: powerupHeight,
+                speed: 3,
+                type: type,
+                image: image
+            };
+            
+            powerups.push(powerup);
+        }
+        
+
+        // 激活道具效果
+        function activatePowerup(type) {
+            // 黑洞和能源道具不需要设置playerPowerup状态
+            if (type !== 'blackhole' && type !== 'energy') {
+                playerPowerup.active = true;
+                playerPowerup.type = type;
+                playerPowerup.startTime = gameTime;
+            }
+            
+            // 根据道具类型激活相应效果
+            switch (type) {
+                case 'laser':
+                    laser.active = true;
+                    laser.x = player.x + player.width / 2 - laser.width / 2;
+                    break;
+                case 'shield':
+                    shield.active = true;
+                    shield.x = player.x + player.width / 2;
+                    shield.y = player.y + player.height / 2;
+                    shield.radius = player.width * 0.7;
+                    break;
+                case 'rapid':
+                    // 强化子弹道具：减少50%攻击冷却时间，持续5秒
+                    playerPowerup.duration = 5;
+                    break;
+                case 'blackhole':
+                    // 黑洞道具在拾取时立即发射导弹
+                    break;
+                case 'energy':
+                    // 备用能源道具恢复一点血量
+                    if (playerHealth < maxPlayerHealth) {
+                        playerHealth++;
+                        // 显示恢复血量的视觉效果
+                        showHealthRecoveryEffect();
+                    }
+                    break;
+            }
+        }
+        
+
+        // 显示恢复血量的视觉效果
+        function showHealthRecoveryEffect() {
+            const effect = document.createElement('div');
+            effect.className = 'absolute z-50 pointer-events-none';
+            effect.style.left = `${player.x + player.width / 2}px`;
+            effect.style.top = `${player.y}px`;
+            effect.style.transform = 'translate(-50%, -100%)';
+            effect.innerHTML = `
+                <div class="text-xl font-bold text-green-500 animate-pulse">+1 HP</div>
+            `;
+            
+            document.querySelector('.relative').appendChild(effect);
+            
+            // 添加上升动画
+            effect.animate([
+                { transform: 'translate(-50%, -100%)', opacity: 1 },
+                { transform: 'translate(-50%, -150%)', opacity: 0 }
+            ], {
+                duration: 1500,
+                easing: 'ease-out'
+            });
+            
+            // 动画结束后移除
+            setTimeout(() => {
+                effect.remove();
+            }, 1500);
+        }
+        
+
+        // 黑洞导弹数组
+        let blackholeMissiles = [];
+        
+        // 发射黑洞导弹
+        function shootBlackhole() {
+            // 清空当前所有玩家子弹
+            playerBullets = [];
+            
+            // 创建并发射一枚黑洞导弹
+            const blackholeMissile = {
+                x: player.x + player.width / 2 - 15,
+                y: player.y,
+                width: 30,
+                height: 30,
+                speed: 8,
+                active: true,
+                image: blackholeImage
+            };
+            
+            blackholeMissiles.push(blackholeMissile);
+            
+            // 显示黑洞导弹发射效果
+            showBlackholeFiredEffect();
+        }
+        
+
+        // 显示黑洞导弹即将发射的提示
+        function showBlackholeLaunchNotification() {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-dark/90 border-l-4 border-purple-500 p-4 rounded-lg shadow-lg z-50 text-center';
+            notification.innerHTML = `
+                <div class="flex flex-col items-center">
+                    <div class="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-purple-500/30 text-purple-500">
+                        <i class="fa fa-rocket text-3xl"></i>
+                    </div>
+                    <h4 class="text-xl font-bold text-white mb-2">黑洞导弹准备中</h4>
+                    <p class="text-gray-300">2秒后发射</p>
+                    <div class="w-32 h-2 bg-gray-700 rounded-full mt-3 overflow-hidden">
+                        <div class="h-full bg-purple-500 w-full" style="animation: countdown 2s linear forwards;"></div>
+                    </div>
+                </div>
+            `;
+            
+            // 添加倒计时动画
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes countdown {
+                    from { width: 100%; }
+                    to { width: 0%; }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            document.body.appendChild(notification);
+            
+            // 2秒后移除通知
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transition = 'opacity 0.3s ease-out';
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 2000);
+        }
+        
+
+        // 显示黑洞导弹发射效果
+        function showBlackholeFiredEffect() {
+            const effect = document.createElement('div');
+            effect.className = 'fixed inset-0 flex items-center justify-center z-40 pointer-events-none';
+            effect.innerHTML = `
+                <div class="text-4xl font-bold text-purple-500 text-shadow animate-pulse">
+                    <i class="fa fa-rocket mr-2"></i>黑洞导弹发射！
+                </div>
+            `;
+            
+            document.body.appendChild(effect);
+            
+            // 1秒后移除效果
+            setTimeout(() => {
+                effect.style.opacity = '0';
+                effect.style.transition = 'opacity 0.5s ease-out';
+                setTimeout(() => {
+                    effect.remove();
+                }, 500);
+            }, 1000);
+        }
+        
+
+        // 触发Boss战
+        function triggerBossFight() {
+            // 先标记Boss战即将开始
+            bossFightTriggered = true;
+            bossFightRound++;
+            
+            // 根据轮数设置Boss血量和子弹数量
+            if (bossFightRound === 1) {
+                bossMaxHealth = 30; // 第一次Boss血量提升为30点
+                bossBulletMultiplier = 1; // 子弹倍数
+            } else if (bossFightRound === 2) {
+                bossMaxHealth = 60; // 第二次Boss血量为60点
+                bossBulletMultiplier = 2; // 子弹翻倍
+            } else if (bossFightRound === 3) {
+                bossMaxHealth = 120; // 第三次Boss血量为120点
+                bossBulletMultiplier = 3; // 子弹三倍
+            } else if (bossFightRound === 4) {
+                bossMaxHealth = 200; // 第四次Boss血量为200点
+                bossBulletMultiplier = 4; // 子弹四倍
+            }
+            
+            // 暂停游戏循环
+            gameRunning = false;
+            
+            // 清空场上所有敌人和炮弹
+            enemies = [];
+            playerBullets = [];
+            enemyBullets = [];
+            blackholeMissiles = [];
+            if (typeof activeBlackholes !== 'undefined') {
+                activeBlackholes = [];
+            }
+            
+            // 初始化Boss对象（在暂停状态下）
+            bossHealth = bossMaxHealth;
+            bossStartTime = gameTime;
+            
+            // 创建Boss对象，设置为200像素宽（原来的2倍），可左右移动
+            boss = {
+                x: canvas.width / 2 - 100, // 初始位置在屏幕中央
+                y: 50, // 直接在屏幕顶部显示
+                width: 200, // 宽度200像素（原来的2倍）
+                height: 60, // 高度60像素（相应调整）
+                speed: 4, // 移动速度
+                direction: 1, // 1表示向右，-1表示向左
+                isEntering: false, // 不再需要出场动画
+                isInvincible: true, // 出场时无敌
+                invincibilityEndTime: gameTime + 2, // 无敌时间结束时间（2秒）
+                fireCooldown: 2000, // 射击冷却时间（毫秒）- 增加冷却时间
+                lastFireTime: Date.now(), // 上次射击时间 - 立即初始化
+                summonCooldown: 4000, // 召唤冷却时间（毫秒）- 增加冷却时间
+                lastSummonTime: Date.now(), // 上次召唤时间 - 立即初始化
+                identity: bossFightRound === 1 ? '太空海盗母舰-复仇号' : bossFightRound === 2 ? '太空海盗旗舰-毁灭者' : bossFightRound === 3 ? '太空海盗终极旗舰-末日使者' : '太空海盗统治者-永恒恐惧'
+            };
+            
+            // 激活Boss
+            bossActive = true;
+            
+                        // 暂时移除Boss战开始时的无敌时间，避免可能的卡顿问题
+            // activateInvincibility(2); // 2秒无敌时间
+            
+            // 显示Boss身份卡片弹窗
+            showBossIdentityCard();
+        }
+
+// 显示Boss身份卡片
+function showBossIdentityCard() {
+            const bossCard = document.createElement('div');
+            bossCard.className = 'fixed inset-0 flex items-center justify-center z-50 bg-black/80 backdrop-blur-sm';
+            
+            const bossTitle = bossFightRound === 1 ? '太空海盗母舰-复仇号' : '太空海盗旗舰-毁灭者';
+            const bossDescription = bossFightRound === 1 
+                ? '太空海盗组织的主力母舰，装备有强大的火力系统和护盾技术。' 
+                : '太空海盗的终极旗舰，拥有毁灭性的武器系统和先进的战术AI。';
+            const bossAbilities = bossFightRound === 1 
+                ? ['两侧弹幕射击', '召唤支援战机', '三排弹幕攻击']
+                : ['超密集弹幕', '轨道轰炸', '时空扭曲攻击', '精英战机召唤'];
+            
+            bossCard.innerHTML = `
+                <div class="bg-dark/90 p-8 rounded-xl border-2 border-red-500/50 shadow-2xl shadow-red-500/20 max-w-2xl w-full">
+                    <div class="flex flex-col md:flex-row gap-6 items-center">
+                        <!-- Boss图片 -->
+                        <div class="w-32 h-32 md:w-40 md:h-40 relative">
+                            <img src="${bossImage.src}" alt="${bossTitle}" class="w-full h-full object-contain glow-red">
+                            <!-- Boss等级 -->
+                            <div class="absolute -top-3 -right-3 bg-red-600 text-white px-3 py-1 rounded-full font-bold text-lg">
+                                Lv.${bossFightRound * 10}
+                            </div>
+                        </div>
+                        
+                        <!-- Boss信息 -->
+                        <div class="flex-1 text-center md:text-left">
+                            <h2 class="text-3xl font-bold text-red-500 mb-2 text-shadow">${bossTitle}</h2>
+                            <p class="text-gray-300 mb-4">${bossDescription}</p>
+                            
+                            <!-- Boss血量 -->
+                            <div class="mb-4">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-white font-semibold">生命值</span>
+                                    <span class="text-red-400 font-bold">${bossMaxHealth} HP</span>
+                                </div>
+                                <div class="w-full bg-gray-700 rounded-full h-3">
+                                    <div class="bg-gradient-to-r from-red-500 to-red-700 h-3 rounded-full" style="width: 100%"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Boss技能 -->
+                            <div>
+                                <h3 class="text-white font-semibold mb-2">特殊技能</h3>
+                                <div class="flex flex-wrap gap-2 justify-center md:justify-start">
+                                    ${bossAbilities.map(ability => `
+                                        <span class="bg-red-900/50 text-red-300 px-3 py-1 rounded-full text-sm border border-red-500/30">
+                                            ${ability}
+                                        </span>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 开始战斗按钮 -->
+                    <div class="mt-8 text-center">
+                        <button id="start-boss-fight" class="bg-gradient-to-r from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 text-white font-bold py-3 px-8 rounded-lg text-lg transition-all transform hover:scale-105 shadow-lg shadow-red-500/30">
+                            开始战斗
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(bossCard);
+            
+            // 添加开始战斗按钮事件
+            document.getElementById('start-boss-fight').addEventListener('click', () => {
+                // 移除Boss卡片
+                document.body.removeChild(bossCard);
+                
+                // 恢复游戏循环
+                gameRunning = true;
+                
+                // 直接更新Boss轮数显示（如果元素存在）
+                const bossRoundElement = document.getElementById('boss-round');
+                if (bossRoundElement) {
+                    bossRoundElement.textContent = `第${bossFightRound}轮 - ${bossTitle}！`;
+                }
+                
+                // 重新开始游戏循环
+                requestAnimationFrame(gameLoop);
+            });
+        }
+        
+
+        // 显示Boss战开始提示
+        function showBossFightNotification() {
+            const notification = document.createElement('div');
+            notification.className = 'fixed inset-0 flex items-center justify-center z-50 pointer-events-none';
+            notification.innerHTML = `
+                <div class="text-center p-6 max-w-lg bg-dark/90 rounded-xl border border-red-500/50 shadow-xl shadow-red-500/20">
+                    <div class="text-4xl md:text-5xl font-bold text-red-500 mb-3 animate-pulse">
+                        <i class="fa fa-warning mr-2"></i>BOSS战！
+                    </div>
+                    <h3 class="text-2xl md:text-3xl font-bold text-white mb-3" id="boss-round">敌军母舰出现！</h3>
+                    <p class="text-lg text-gray-300">准备迎战太空海盗的母舰，击败它获得丰厚奖励！</p>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // 1秒后移除通知
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transition = 'opacity 0.5s ease-out';
+                setTimeout(() => {
+                    notification.remove();
+                }, 500);
+            }, 1000);
+        }
+        
+
+        // 绘制Boss母舰
+        function drawBoss() {
+            if (!bossActive) return;
+            
+            // 绘制Boss
+            ctx.drawImage(bossImage, boss.x, boss.y, boss.width, boss.height);
+            
+            // 绘制血量条
+            const healthBarWidth = boss.width - 20;
+            const healthBarHeight = 10;
+            const healthBarX = boss.x + 10;
+            const healthBarY = boss.y - 20;
+            
+            // 背景
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+            
+            // 血量
+            const healthPercentage = bossHealth / bossMaxHealth;
+            ctx.fillStyle = healthPercentage > 0.5 ? '#10B981' : healthPercentage > 0.25 ? '#F59E0B' : '#EF4444';
+            ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercentage, healthBarHeight);
+            
+            // 血量文本
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 12px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${bossHealth}/${bossMaxHealth}`, healthBarX + healthBarWidth / 2, healthBarY + healthBarHeight - 2);
+        }
+        
+
+        // 检测玩家子弹与Boss的碰撞
+        function checkBulletBossCollision() {
+            if (!bossActive) return;
+            
+            // 如果Boss处于无敌状态，不处理碰撞
+            if (boss.isInvincible) return;
+            
+            playerBullets.forEach((bullet, bulletIndex) => {
+                if (checkCollision(bullet, boss)) {
+                    // 减少Boss血量
+                    bossHealth -= bulletDamage;
+                    
+                    // 增加能量值（攻击Boss也能获得能量）
+                    playerEnergy = Math.min(maxPlayerEnergy, playerEnergy + 1);
+                    
+                    // 检查能量是否满
+                    if (playerEnergy >= maxPlayerEnergy) {
+                        triggerEnergyBurst();
+                    }
+                    
+                    // 创建爆炸效果
+                    createExplosion(bullet.x + bullet.width / 2, bullet.y + bullet.height / 2);
+                    
+                    // 移除子弹
+                    playerBullets.splice(bulletIndex, 1);
+                    
+                    // 检查Boss是否损失了1/3的血量，如果是则触发无敌和召唤援军
+                    checkBossHealthThreshold();
+                    
+                    // 检查Boss是否被击败
+                    if (bossHealth <= 0) {
+                        bossDefeated();
+                    }
+                }
+            });
+        }
+        
+
+        // 更新Boss位置和行为
+        function updateBoss() {
+            if (!bossActive) return;
+            
+            // 检查无敌时间是否结束
+            if (boss.isInvincible && gameTime >= boss.invincibilityEndTime) {
+                boss.isInvincible = false;
+            }
+            
+            // 更新Boss位置
+            boss.x += boss.speed * boss.direction;
+            
+            // 检测边界并改变方向
+            if (boss.x <= 0 || boss.x + boss.width >= canvas.width) {
+                boss.direction *= -1;
+            }
+            
+            // 如果Boss仍处于无敌状态，只移动不攻击
+            if (boss.isInvincible) {
+                return;
+            }
+            
+            // Boss射击和技能系统
+            const now = Date.now();
+            const bossFightTime = now - boss.startTime; // Boss战已经进行的时间（毫秒）
+            
+            // 5秒内只使用普通射击，不使用技能
+            if (bossFightTime < 5000) {
+                if (now - boss.lastFireTime > boss.fireCooldown) {
+                    // 普通射击模式
+                    // 根据子弹倍数发射多倍子弹
+                    for (let m = 0; m < bossBulletMultiplier; m++) {
+                        const leftBullet = {
+                            x: boss.x + (m - Math.floor(bossBulletMultiplier/2)) * 8, // 子弹略微分散
+                            y: boss.y + boss.height,
+                            width: 10,
+                            height: 20,
+                            speed: 5 + m * 0.3 // 速度略有差异
+                        };
+                        
+                        const rightBullet = {
+                            x: boss.x + boss.width - 10 - (m - Math.floor(bossBulletMultiplier/2)) * 8, // 子弹略微分散
+                            y: boss.y + boss.height,
+                            width: 10,
+                            height: 20,
+                            speed: 5 + m * 0.3 // 速度略有差异
+                        };
+                        
+                        enemyBullets.push(leftBullet);
+                        enemyBullets.push(rightBullet);
+                    }
+                    
+                    boss.lastFireTime = now;
+                }
+            } else {
+                // 5秒后开始使用技能系统
+                if (now - boss.lastFireTime > boss.fireCooldown) {
+                    // 随机选择是普通射击还是技能
+                    if (Math.random() < 0.4) {
+                        // 40%概率使用普通射击 - 增强版
+                        bossShootEnhanced();
+                    } else {
+                        // 60%概率使用技能
+                        const now = Date.now();
+                        if (now - bossLastSkillTime > bossSkillCooldown) {
+                            useBossSkill();
+                            bossLastSkillTime = now;
+                        } else {
+                            // 如果技能冷却中，使用普通射击
+                            const leftBullet = {
+                                x: boss.x,
+                                y: boss.y + boss.height,
+                                width: 10,
+                                height: 20,
+                                speed: 5
+                            };
+                            
+                            const rightBullet = {
+                                x: boss.x + boss.width - 10,
+                                y: boss.y + boss.height,
+                                width: 10,
+                                height: 20,
+                                speed: 5
+                            };
+                            
+                            enemyBullets.push(leftBullet);
+                            enemyBullets.push(rightBullet);
+                        }
+                    }
+                    
+                    boss.lastFireTime = now;
+                }
+            }
+            
+            // Boss召唤敌机功能 - 每15秒召唤一次
+            if (now - boss.lastSummonTime > 15000) {
+                bossSummonEnemies();
+                boss.lastSummonTime = now;
+            }
+        }
+        
+
+        // Boss召唤敌机支援
+        function bossSummonEnemies() {
+            // 根据Boss战轮数决定召唤敌机的数量和类型
+            const summonCount = 2 + bossFightRound; // 每轮Boss战增加1架敌机
+            const enemyTypes = ['normal', 'normal', 'level1']; // 普通敌机和一级敌机
+            
+            // 显示召唤提示
+            showBossSummonNotification();
+            
+            // 依次召唤敌机
+            for (let i = 0; i < summonCount; i++) {
+                setTimeout(() => {
+                    // 随机选择敌机类型
+                    const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+                    
+                    // 从屏幕两侧随机位置生成敌机
+                    const fromLeft = Math.random() < 0.5;
+                    const x = fromLeft ? -60 : canvas.width;
+                    const y = 100 + Math.random() * 200;
+                    
+                    // 创建敌机
+                    const enemy = {
+                        x: x,
+                        y: y,
+                        width: enemyType === 'normal' ? 60 : 70,
+                        height: enemyType === 'normal' ? 60 : 70,
+                        type: enemyType,
+                        health: enemyType === 'normal' ? 1 : 3,
+                        score: enemyType === 'normal' ? 1 : 5,
+                        speed: enemyType === 'normal' ? 2 * 0.7 : 1.5 * 0.7,
+                        maxSpeed: enemyType === 'normal' ? 4 * 0.7 : 3.5 * 0.7,
+                        direction: fromLeft ? 1 : -1, // 从左向右或从右向左
+                        lastShot: 0,
+                        shotCooldown: enemyType === 'normal' ? 1 : 5,
+                        burstFire: enemyType === 'level1',
+                        burstCount: 3,
+                        burstInterval: 0.1
+                    };
+                    
+                    enemies.push(enemy);
+                    
+                    // 创建入场动画效果
+                    createExplosion(x + (fromLeft ? 30 : -30), y + 30, 'blue');
+                }, i * 800); // 每0.8秒召唤一架敌机
+            }
+        }
+
+        // 显示Boss召唤敌机提示
+        function showBossSummonNotification() {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-1/4 right-4 transform translate-x-full transition-transform duration-500 ease-out z-50';
+            notification.innerHTML = `
+                <div class="bg-red-900/90 border-l-4 border-red-500 p-4 rounded-lg shadow-lg">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-full flex items-center justify-center mr-3 bg-red-500/30 text-red-500">
+                            <i class="fa fa-rocket text-xl"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-white">Boss召唤增援！</h4>
+                            <p class="text-sm text-gray-300">敌方战机正在赶来支援</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // 显示动画
+            setTimeout(() => {
+                notification.classList.remove('translate-x-full');
+            }, 100);
+            
+            // 3秒后隐藏
+            setTimeout(() => {
+                notification.classList.add('translate-x-full');
+                setTimeout(() => {
+                    notification.remove();
+                }, 500);
+            }, 3000);
+        }
+
+        // Boss射击
+        function bossShoot() {
+            // 随机选择射击模式
+            const shootMode = Math.floor(Math.random() * 3); // 0: 普通射击, 1: 两侧弹幕, 2: 三排弹幕
+            
+            switch(shootMode) {
+                case 0:
+                    // 普通射击：从Boss两侧发射子弹
+                    const leftBullet = {
+                        x: boss.x,
+                        y: boss.y + boss.height,
+                        width: 10,
+                        height: 20,
+                        speed: 5
+                    };
+                    
+                    const rightBullet = {
+                        x: boss.x + boss.width - 10,
+                        y: boss.y + boss.height,
+                        width: 10,
+                        height: 20,
+                        speed: 5
+                    };
+                    
+                    enemyBullets.push(leftBullet);
+                    enemyBullets.push(rightBullet);
+                    break;
+                    
+                case 1:
+                    // 技能1：向左右两侧分别发射两排子弹，每一排五发
+                    bossShootSideBarrage();
+                    break;
+                    
+                case 2:
+                    // 技能2：直接打出三排子弹，每一排有4发炮弹
+                    bossShootTripleRowBarrage();
+                    break;
+            }
+        }
+        
+
+        // Boss技能1：两侧弹幕
+        function bossShootSideBarrage() {
+            // 左侧弹幕
+            for (let i = 0; i < 5; i++) {
+                // 上排左侧弹幕
+                const leftTopBullet = {
+                    x: boss.x,
+                    y: boss.y + boss.height,
+                    width: 8,
+                    height: 16,
+                    speedX: -2 - i * 0.5, // 向左的速度逐渐增加
+                    speedY: 3 + i * 0.3, // 向下的速度逐渐增加
+                    diagonal: true
+                };
+                
+                // 下排左侧弹幕（延迟发射）
+                setTimeout(() => {
+                    const leftBottomBullet = {
+                        x: boss.x,
+                        y: boss.y + boss.height,
+                        width: 8,
+                        height: 16,
+                        speedX: -1.5 - i * 0.5, // 向左的速度逐渐增加
+                        speedY: 4 + i * 0.2, // 向下的速度逐渐增加
+                        diagonal: true
+                    };
+                    enemyBullets.push(leftBottomBullet);
+                }, 100 * i);
+                
+                enemyBullets.push(leftTopBullet);
+            }
+            
+            // 右侧弹幕
+            for (let i = 0; i < 5; i++) {
+                // 上排右侧弹幕
+                const rightTopBullet = {
+                    x: boss.x + boss.width - 8,
+                    y: boss.y + boss.height,
+                    width: 8,
+                    height: 16,
+                    speedX: 2 + i * 0.5, // 向右的速度逐渐增加
+                    speedY: 3 + i * 0.3, // 向下的速度逐渐增加
+                    diagonal: true
+                };
+                
+                // 下排右侧弹幕（延迟发射）
+                setTimeout(() => {
+                    const rightBottomBullet = {
+                        x: boss.x + boss.width - 8,
+                        y: boss.y + boss.height,
+                        width: 8,
+                        height: 16,
+                        speedX: 1.5 + i * 0.5, // 向右的速度逐渐增加
+                        speedY: 4 + i * 0.2, // 向下的速度逐渐增加
+                        diagonal: true
+                    };
+                    enemyBullets.push(rightBottomBullet);
+                }, 100 * i);
+                
+                enemyBullets.push(rightTopBullet);
+            }
+            
+
+        }
+        
+
+        // Boss技能2：三排弹幕
+        function bossShootTripleRowBarrage() {
+            const bulletWidth = 8;
+            const bulletHeight = 16;
+            const rowSpacing = 20; // 行间距
+            
+            // 第一排弹幕（从左到右）
+            for (let i = 0; i < 4; i++) {
+                const bullet = {
+                    x: boss.x + (boss.width / 5) * (i + 1) - bulletWidth / 2,
+                    y: boss.y + boss.height,
+                    width: bulletWidth,
+                    height: bulletHeight,
+                    speed: 4
+                };
+                enemyBullets.push(bullet);
+            }
+            
+            // 第二排弹幕（延迟发射，交错排列）
+            setTimeout(() => {
+                for (let i = 0; i < 4; i++) {
+                    const bullet = {
+                        x: boss.x + (boss.width / 5) * (i + 0.5) - bulletWidth / 2,
+                        y: boss.y + boss.height,
+                        width: bulletWidth,
+                        height: bulletHeight,
+                        speed: 5
+                    };
+                    enemyBullets.push(bullet);
+                }
+            }, 200);
+            
+            // 第三排弹幕（延迟更长，混合方向）
+            setTimeout(() => {
+                for (let i = 0; i < 4; i++) {
+                    const bullet = {
+                        x: boss.x + (boss.width / 5) * (i + 1) - bulletWidth / 2,
+                        y: boss.y + boss.height,
+                        width: bulletWidth,
+                        height: bulletHeight,
+                        speedX: (i - 1.5) * 1.5, // 水平速度，中间慢，两边快
+                        speedY: 6, // 垂直速度
+                        diagonal: true
+                    };
+                    enemyBullets.push(bullet);
+                }
+            }, 400);
+            
+
+        }
+        
+
+        
+        // Boss增强射击函数 - 左右两侧各发射两排炮弹
+        function bossShootEnhanced() {
+            const sides = 2; // 左右两侧
+            const rowsPerSide = 2; // 每侧2排
+            const bulletsPerRow = 10; // 每排10发炮弹
+            const bulletWidth = 8;
+            const bulletHeight = 16;
+            const baseSpeed = 3; // 基础速度
+            const bulletInterval = 100; // 炮弹间隔100毫秒(0.1秒)
+            
+            // 左侧发射
+            for (let row = 0; row < rowsPerSide; row++) {
+                // 左侧每排炮弹的起始位置
+                const leftStartX = boss.x;
+                const leftWidth = boss.width / 2; // 左侧占Boss宽度的一半
+                const leftSpacing = leftWidth / (bulletsPerRow + 1);
+                
+                // 左侧每排发射10发炮弹，间隔0.1秒
+                for (let i = 1; i <= bulletsPerRow; i++) {
+                    setTimeout(() => {
+                        const x = leftStartX + leftSpacing * i - bulletWidth / 2;
+                        const speedVariation = row * 0.5; // 不同排速度不同
+                        
+                        // 根据子弹倍数发射多倍子弹
+                        for (let m = 0; m < bossBulletMultiplier; m++) {
+                            const bullet = {
+                                x: x + (m - Math.floor(bossBulletMultiplier/2)) * 5, // 子弹略微分散
+                                y: boss.y + boss.height,
+                                width: bulletWidth,
+                                height: bulletHeight,
+                                speed: baseSpeed + speedVariation + m * 0.2 // 速度略有差异
+                            };
+                            
+                            enemyBullets.push(bullet);
+                        }
+                    }, row * 300 + i * bulletInterval); // 排间隔300ms，炮弹间隔100ms
+                }
+            }
+            
+            // 右侧发射
+            for (let row = 0; row < rowsPerSide; row++) {
+                // 右侧每排炮弹的起始位置
+                const rightStartX = boss.x + boss.width / 2;
+                const rightWidth = boss.width / 2; // 右侧占Boss宽度的一半
+                const rightSpacing = rightWidth / (bulletsPerRow + 1);
+                
+                // 右侧每排发射10发炮弹，间隔0.1秒
+                for (let i = 1; i <= bulletsPerRow; i++) {
+                    setTimeout(() => {
+                        const x = rightStartX + rightSpacing * i - bulletWidth / 2;
+                        const speedVariation = row * 0.5; // 不同排速度不同
+                        
+                        // 根据子弹倍数发射多倍子弹
+                        for (let m = 0; m < bossBulletMultiplier; m++) {
+                            const bullet = {
+                                x: x + (m - Math.floor(bossBulletMultiplier/2)) * 5, // 子弹略微分散
+                                y: boss.y + boss.height,
+                                width: bulletWidth,
+                                height: bulletHeight,
+                                speed: baseSpeed + speedVariation + m * 0.2 // 速度略有差异
+                            };
+                            
+                            enemyBullets.push(bullet);
+                        }
+                    }, row * 300 + i * bulletInterval); // 排间隔300ms，炮弹间隔100ms
+                }
+            }
+        }
+
+        // Boss技能系统
+        function useBossSkill() {
+            const skills = [
+                'summonEnemies',
+                'spreadShot',
+                'homingMissiles',
+                'zigzagPattern',
+                'spiralShot',
+                'crossfire',
+                'volleyShot',
+                'laserBarrage',
+                'sideBounce',
+                'orbitalAttack'
+            ];
+            
+            // 随机选择一个技能
+            const selectedSkill = skills[Math.floor(Math.random() * skills.length)];
+            
+            // 根据选择的技能执行相应的攻击
+            switch (selectedSkill) {
+                case 'summonEnemies':
+                    // 召唤敌机
+                    spawnEnemyWave();
+                    break;
+                case 'spreadShot':
+                    // 扇形弹幕攻击
+                    spreadShotAttack();
+                    break;
+                case 'homingMissiles':
+                    // 追踪导弹
+                    fireHomingMissiles();
+                    break;
+                case 'zigzagPattern':
+                    // 锯齿形弹幕
+                    zigzagAttack();
+                    break;
+                case 'spiralShot':
+                    // 螺旋弹幕
+                    spiralAttack();
+                    break;
+                case 'crossfire':
+                    // 交叉火力
+                    crossfireAttack();
+                    break;
+                case 'volleyShot':
+                    // 齐射攻击
+                    volleyAttack();
+                    break;
+                case 'laserBarrage':
+                    // 激光弹幕
+                    laserBarrageAttack();
+                    break;
+                case 'sideBounce':
+                    // 两侧反弹攻击
+                    sideBounceAttack();
+                    break;
+                case 'orbitalAttack':
+                    // 轨道攻击
+                    orbitalAttack();
+                    break;
+            }
+        }
+        
+        // 召唤敌机群
+        function spawnEnemyWave() {
+            // 一次性召唤5架敌机
+            const count = 5;
+            
+            for (let i = 0; i < count; i++) {
+                // 随机选择敌人类型
+                let enemyType;
+                const rand = Math.random();
+                if (rand < 0.5) {
+                    enemyType = 'normal';
+                } else if (rand < 0.85) {
+                    enemyType = 'level1';
+                } else {
+                    enemyType = 'level2';
+                }
+                
+                // 生成敌人
+                spawnSpecificEnemy(enemyType);
+            }
+        }
+        
+        // 扇形弹幕攻击
+        function spreadShotAttack() {
+            const angleCount = 8; // 发射8发子弹形成扇形
+            const angleStep = Math.PI / angleCount; // 每发子弹的角度间隔
+            
+            for (let i = 0; i < angleCount; i++) {
+                const angle = -Math.PI/2 + i * angleStep; // 从上方开始，向两侧扩散
+                const speed = 4;
+                
+                const bullet = {
+                    x: boss.x + boss.width / 2,
+                    y: boss.y + boss.height,
+                    width: 8,
+                    height: 16,
+                    speedX: Math.cos(angle) * speed,
+                    speedY: Math.sin(angle) * speed,
+                    type: 'spread'
+                };
+                
+                enemyBullets.push(bullet);
+            }
+        }
+        
+        // 追踪导弹
+        function fireHomingMissiles() {
+            const missileCount = 2; // 发射2枚追踪导弹
+            
+            for (let i = 0; i < missileCount; i++) {
+                const missile = {
+                    x: boss.x + boss.width / 2 - 10 + i * 20,
+                    y: boss.y + boss.height,
+                    width: 12,
+                    height: 24,
+                    speed: 3,
+                    type: 'homing',
+                    targetX: player.x,
+                    targetY: player.y,
+                    homingStrength: 0.1 // 追踪强度
+                };
+                
+                enemyBullets.push(missile);
+            }
+        }
+        
+        // 锯齿形弹幕
+        function zigzagAttack() {
+            const zigzagCount = 5; // 发射5发子弹
+            
+            for (let i = 0; i < zigzagCount; i++) {
+                const bullet = {
+                    x: boss.x + (i + 1) * boss.width / (zigzagCount + 1),
+                    y: boss.y + boss.height,
+                    width: 8,
+                    height: 16,
+                    speedY: 3,
+                    speedX: (i % 2 === 0 ? 1 : -1) * 2, // 左右交替移动
+                    type: 'zigzag',
+                    zigzagTimer: 0,
+                    zigzagInterval: 60 // 每60帧改变方向
+                };
+                
+                enemyBullets.push(bullet);
+            }
+        }
+        
+        // 螺旋弹幕
+        function spiralAttack() {
+            const spiralCount = 12; // 发射12发子弹形成螺旋
+            const angleStep = Math.PI * 2 / spiralCount;
+            
+            for (let i = 0; i < spiralCount; i++) {
+                const angle = i * angleStep;
+                const speed = 3;
+                
+                const bullet = {
+                    x: boss.x + boss.width / 2,
+                    y: boss.y + boss.height,
+                    width: 8,
+                    height: 16,
+                    speedX: Math.cos(angle) * speed,
+                    speedY: Math.sin(angle) * speed,
+                    type: 'spiral'
+                };
+                
+                enemyBullets.push(bullet);
+            }
+        }
+        
+        // 交叉火力攻击
+        function crossfireAttack() {
+            const crossCount = 8; // 每侧发射8发子弹
+            const bulletWidth = 8;
+            const bulletHeight = 16;
+            const baseSpeed = 4;
+            
+            // 左侧发射向右上方的子弹
+            for (let i = 0; i < crossCount; i++) {
+                const angle = Math.PI / 4 - (i * Math.PI / 16); // 45度到0度
+                const speed = baseSpeed + (i * 0.2); // 速度逐渐增加
+                
+                const bullet = {
+                    x: boss.x,
+                    y: boss.y + boss.height,
+                    width: bulletWidth,
+                    height: bulletHeight,
+                    speedX: Math.cos(angle) * speed,
+                    speedY: Math.sin(angle) * speed,
+                    type: 'crossfire'
+                };
+                
+                enemyBullets.push(bullet);
+            }
+            
+            // 右侧发射向左上方的子弹
+            for (let i = 0; i < crossCount; i++) {
+                const angle = Math.PI / 4 + (i * Math.PI / 16); // 45度到90度
+                const speed = baseSpeed + (i * 0.2); // 速度逐渐增加
+                
+                const bullet = {
+                    x: boss.x + boss.width - bulletWidth,
+                    y: boss.y + boss.height,
+                    width: bulletWidth,
+                    height: bulletHeight,
+                    speedX: Math.cos(angle) * speed,
+                    speedY: Math.sin(angle) * speed,
+                    type: 'crossfire'
+                };
+                
+                enemyBullets.push(bullet);
+            }
+            
+            // 短暂延迟后，从上方发射垂直下落的子弹
+            setTimeout(() => {
+                for (let i = 0; i < 12; i++) {
+                    const bullet = {
+                        x: boss.x + (i * boss.width / 11),
+                        y: boss.y + boss.height,
+                        width: bulletWidth,
+                        height: bulletHeight,
+                        speed: baseSpeed + 1,
+                        type: 'crossfire'
+                    };
+                    
+                    enemyBullets.push(bullet);
+                }
+            }, 300);
+        }
+        
+        // 齐射攻击
+        function volleyAttack() {
+            const volleyRows = 3; // 3轮齐射
+            const bulletsPerVolley = 15; // 每轮15发子弹
+            const bulletWidth = 8;
+            const bulletHeight = 16;
+            const baseSpeed = 3;
+            
+            // 连续发射3轮齐射，每轮间隔一定时间
+            for (let volley = 0; volley < volleyRows; volley++) {
+                setTimeout(() => {
+                    // 每轮发射15发子弹，形成密集弹幕
+                    for (let i = 0; i < bulletsPerVolley; i++) {
+                        // 随机位置发射，增加不确定性
+                        const x = boss.x + (Math.random() * boss.width) - (bulletWidth / 2);
+                        const speedVariation = Math.random() * 2; // 速度随机变化
+                        
+                        const bullet = {
+                            x: x,
+                            y: boss.y + boss.height,
+                            width: bulletWidth,
+                            height: bulletHeight,
+                            speed: baseSpeed + speedVariation,
+                            type: 'volley'
+                        };
+                        
+                        enemyBullets.push(bullet);
+                    }
+                }, volley * 500); // 每轮间隔500毫秒
+            }
+        }
+        
+        // 激光弹幕攻击
+        function laserBarrageAttack() {
+            const laserCount = 5; // 5道激光
+            const bulletWidth = 12; // 激光宽度稍大
+            const bulletHeight = 20;
+            const baseSpeed = 5; // 激光速度较快
+            
+            // 发射5道激光，每道激光由多颗子弹组成
+            for (let laser = 0; laser < laserCount; laser++) {
+                const laserX = boss.x + (laser * boss.width / (laserCount - 1));
+                
+                // 每道激光发射8颗子弹，形成连续激光束效果
+                for (let i = 0; i < 8; i++) {
+                    setTimeout(() => {
+                        const bullet = {
+                            x: laserX - (bulletWidth / 2),
+                            y: boss.y + boss.height,
+                            width: bulletWidth,
+                            height: bulletHeight,
+                            speed: baseSpeed,
+                            type: 'laser',
+                            // 激光特效标记
+                            isLaser: true
+                        };
+                        
+                        enemyBullets.push(bullet);
+                    }, i * 50); // 每颗子弹间隔50毫秒
+                }
+            }
+        }
+        
+        // 两侧反弹攻击
+        function sideBounceAttack() {
+            const rowsPerSide = 3; // 每侧3排
+            const bulletsPerRow = 15; // 每排15发炮弹
+            const bulletWidth = 8;
+            const bulletHeight = 16;
+            const baseSpeed = 4;
+            
+            // 左侧45度角发射
+            for (let row = 0; row < rowsPerSide; row++) {
+                const angle = Math.PI / 4; // 45度角
+                const speedVariation = row * 0.3; // 不同排速度不同
+                
+                for (let i = 0; i < bulletsPerRow; i++) {
+                    setTimeout(() => {
+                        const bullet = {
+                            x: boss.x,
+                            y: boss.y + boss.height,
+                            width: bulletWidth,
+                            height: bulletHeight,
+                            speedX: Math.cos(angle) * (baseSpeed + speedVariation),
+                            speedY: Math.sin(angle) * (baseSpeed + speedVariation),
+                            type: 'bounce',
+                            bounced: false, // 标记是否已经反弹过
+                            bounceCount: 0 // 反弹次数
+                        };
+                        
+                        enemyBullets.push(bullet);
+                    }, i * 50 + row * 200); // 炮弹间隔50ms，排间隔200ms
+                }
+            }
+            
+            // 右侧45度角发射
+            for (let row = 0; row < rowsPerSide; row++) {
+                const angle = 3 * Math.PI / 4; // 135度角
+                const speedVariation = row * 0.3; // 不同排速度不同
+                
+                for (let i = 0; i < bulletsPerRow; i++) {
+                    setTimeout(() => {
+                        const bullet = {
+                            x: boss.x + boss.width - bulletWidth,
+                            y: boss.y + boss.height,
+                            width: bulletWidth,
+                            height: bulletHeight,
+                            speedX: Math.cos(angle) * (baseSpeed + speedVariation),
+                            speedY: Math.sin(angle) * (baseSpeed + speedVariation),
+                            type: 'bounce',
+                            bounced: false, // 标记是否已经反弹过
+                            bounceCount: 0 // 反弹次数
+                        };
+                        
+                        enemyBullets.push(bullet);
+                    }, i * 50 + row * 200); // 炮弹间隔50ms，排间隔200ms
+                }
+            }
+        }
+        
+        // 轨道攻击
+        function orbitalAttack() {
+            const orbitCount = 2; // 2层轨道
+            const bulletsPerOrbit = 12; // 每层12发炮弹
+            const bulletWidth = 8;
+            const bulletHeight = 16;
+            const baseRadius = 100; // 基础轨道半径
+            const orbitSpeed = 0.02; // 轨道旋转速度
+            
+            // 创建轨道弹幕
+            for (let orbit = 0; orbit < orbitCount; orbit++) {
+                const radius = baseRadius + (orbit * 50); // 外层轨道半径更大
+                const speed = orbitSpeed - (orbit * 0.005); // 外层轨道旋转稍慢
+                
+                for (let i = 0; i < bulletsPerOrbit; i++) {
+                    const angle = (i / bulletsPerOrbit) * Math.PI * 2;
+                    const startX = boss.x + boss.width / 2 + Math.cos(angle) * radius;
+                    const startY = boss.y + boss.height / 2 + Math.sin(angle) * radius;
+                    
+                    const bullet = {
+                        x: startX - bulletWidth / 2,
+                        y: startY - bulletHeight / 2,
+                        width: bulletWidth,
+                        height: bulletHeight,
+                        type: 'orbital',
+                        orbitCenterX: boss.x + boss.width / 2,
+                        orbitCenterY: boss.y + boss.height / 2,
+                        radius: radius,
+                        angle: angle,
+                        orbitSpeed: speed,
+                        // 轨道弹幕向外侧缓慢扩散
+                        expandSpeed: 0.2
+                    };
+                    
+                    enemyBullets.push(bullet);
+                }
+            }
+        }
+
+        // Boss被击败
+        function bossDefeated() {
+            bossActive = false;
+            
+            // 创建大型爆炸效果
+            const bossWidth = canvas.width / 2;
+            const bossHeight = bossWidth / 3;
+            const bossX = (canvas.width - bossWidth) / 2;
+            const bossY = 50;
+            
+            // 创建多个爆炸效果
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    createExplosion(
+                        bossX + Math.random() * bossWidth,
+                        bossY + Math.random() * bossHeight
+                    );
+                }, i * 200);
+            }
+            
+            // 恢复所有血量
+            playerHealth = maxPlayerHealth;
+            
+            // 显示Boss被击败提示
+            showBossDefeatedNotification();
+            
+            // 更新血量显示
+            setTimeout(() => {
+                const healthDisplay = document.getElementById('health-display');
+                if (healthDisplay) {
+                    healthDisplay.textContent = `${maxPlayerHealth}/${maxPlayerHealth}`;
+                }
+            }, 100);
+            
+            // 检查是否是最后一轮Boss战
+            if (bossFightRound === 4) {
+                // 游戏胜利
+                gameVictory();
+            } else {
+                // 增加Boss战时敌机刷新数量
+                bossEnemySpawnCount++;
+                
+                // 设置下一次Boss出现时间（30秒后）
+                nextBossTime = Math.floor(gameTime) + 30;
+                bossFightTriggered = false;
+                
+                // 立即显示升级界面，不延迟
+                showUpgradeScreen();
+            }
+        }
+        
+
+        // 显示Boss被击败提示
+        function showBossDefeatedNotification() {
+            const notification = document.createElement('div');
+            notification.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50';
+            notification.innerHTML = `
+                <div class="text-center p-8 max-w-lg">
+                    <div class="text-6xl font-bold text-green-500 mb-4 animate-pulse">
+                        <i class="fa fa-trophy mr-2"></i>胜利！
+                    </div>
+                    <h3 class="text-3xl font-bold text-white mb-4">敌军母舰被摧毁！</h3>
+                    <p class="text-xl text-gray-300 mb-4">你成功击败了太空海盗的母舰！</p>
+                    <div class="flex justify-center items-center gap-4 mb-6">
+                        <div class="bg-green-500/20 p-3 rounded-lg">
+                            <p class="text-gray-400">血量恢复</p>
+                            <p class="text-2xl font-bold text-green-500" id="health-display">0/0</p>
+                        </div>
+                        <div class="bg-blue-500/20 p-3 rounded-lg">
+                            <p class="text-gray-400">奖励</p>
+                            <p class="text-2xl font-bold text-blue-500">免费升级</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // 3秒后移除通知
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transition = 'opacity 0.5s ease-out';
+                setTimeout(() => {
+                    notification.remove();
+                }, 500);
+            }, 3000);
+        }
+        
+
+        // 黑洞效果数组
+        let activeBlackholes = [];
+        
+        // 激活黑洞效果
+        function activateBlackholeEffect(x, y) {
+            // 创建黑洞对象
+            const blackhole = {
+                x: x,
+                y: y,
+                radius: 400, // 黑洞半径400像素
+                startTime: gameTime,
+                duration: 3, // 持续3秒
+                active: true
+            };
+            
+            // 添加到活跃黑洞数组
+            activeBlackholes.push(blackhole);
+            
+            // 立即对半径400像素内的敌机造成10点伤害
+            enemies.forEach((enemy, enemyIndex) => {
+                const enemyCenterX = enemy.x + enemy.width / 2;
+                const enemyCenterY = enemy.y + enemy.height / 2;
+                const distance = Math.sqrt(Math.pow(enemyCenterX - x, 2) + Math.pow(enemyCenterY - y, 2));
+                
+                if (distance <= blackhole.radius) {
+                    // 对敌人造成10点伤害
+                    enemy.health -= 10;
+                    
+                    // 创建爆炸效果
+                    createExplosion(enemyCenterX, enemyCenterY);
+                    
+                    // 如果敌人被击败
+                    if (enemy.health <= 0) {
+                        // 移除敌人并增加分数
+                        enemies.splice(enemyIndex, 1);
+                        delete lastEnemyShot[enemyIndex];
+                        score += enemy.score;
+                        updateScore();
+                    }
+                }
+            });
+            
+            // 检查是否有活跃的Boss，如果有且在黑洞半径内，对Boss造成伤害
+            if (bossActive && !boss.isInvincible) {
+                const bossCenterX = boss.x + boss.width / 2;
+                const bossCenterY = boss.y + boss.height / 2;
+                const distance = Math.sqrt(Math.pow(bossCenterX - x, 2) + Math.pow(bossCenterY - y, 2));
+                
+                if (distance <= blackhole.radius) {
+                    // 对Boss造成10点伤害
+                    bossHealth -= 10;
+                    
+                    // 创建爆炸效果
+                    createExplosion(bossCenterX, bossCenterY);
+                    
+                    // 增加能量值（攻击Boss也能获得能量）
+                    playerEnergy = Math.min(maxPlayerEnergy, playerEnergy + 1);
+                    
+                    // 检查能量是否满
+                    if (playerEnergy >= maxPlayerEnergy) {
+                        triggerEnergyBurst();
+                    }
+                    
+                    // 检查Boss是否被击败
+                    if (bossHealth <= 0) {
+                        bossDefeated();
+                    }
+                }
+            }
+            
+            // 立即消除半径400像素内的所有敌机炮弹
+            for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                const bullet = enemyBullets[i];
+                const bulletCenterX = bullet.x + bullet.width / 2;
+                const bulletCenterY = bullet.y + bullet.height / 2;
+                const distance = Math.sqrt(Math.pow(bulletCenterX - x, 2) + Math.pow(bulletCenterY - y, 2));
+                
+                if (distance <= blackhole.radius) {
+                    // 移除炮弹
+                    enemyBullets.splice(i, 1);
+                }
+            }
+            
+            // 创建黑洞视觉效果
+            const blackholeEffect = document.createElement('div');
+            blackholeEffect.id = `blackhole-${activeBlackholes.length - 1}`;
+            blackholeEffect.style.position = 'absolute';
+            blackholeEffect.style.left = `${x - blackhole.radius}px`;
+            blackholeEffect.style.top = `${y - blackhole.radius}px`;
+            blackholeEffect.style.width = `${blackhole.radius * 2}px`;
+            blackholeEffect.style.height = `${blackhole.radius * 2}px`;
+            blackholeEffect.style.borderRadius = '50%';
+            blackholeEffect.style.background = 'radial-gradient(circle, rgba(139,92,246,0.4) 0%, rgba(0,0,0,0.8) 70%)';
+            blackholeEffect.style.animation = 'blackholePulse 3s forwards';
+            blackholeEffect.style.zIndex = '15';
+            blackholeEffect.style.pointerEvents = 'none'; // 不影响鼠标事件
+            blackholeEffect.style.transformOrigin = 'center center'; // 确保缩放从中心开始
+            blackholeEffect.style.boxShadow = '0 0 50px rgba(139, 92, 246, 0.6)'; // 添加发光效果
+            
+            // 添加黑洞脉冲动画
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes blackholePulse {
+                    0% { transform: scale(0.3); opacity: 0.8; }
+                    20% { transform: scale(1); opacity: 0.7; }
+                    80% { transform: scale(1); opacity: 0.7; }
+                    100% { transform: scale(1.2); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            document.body.appendChild(blackholeEffect);
+            
+            // 3秒后移除黑洞效果
+            setTimeout(() => {
+                blackholeEffect.remove();
+                // 移除黑洞对象
+                const index = activeBlackholes.findIndex(bh => bh === blackhole);
+                if (index !== -1) {
+                    activeBlackholes.splice(index, 1);
+                }
+            }, 3000);
+        }
+        
+
+        // 更新黑洞效果
+        function updateBlackholes() {
+            activeBlackholes.forEach(blackhole => {
+                // 检查是否过期
+                if (gameTime - blackhole.startTime > blackhole.duration) {
+                    blackhole.active = false;
+                    return;
+                }
+                
+                // 摧毁范围内的所有敌机
+                enemies.forEach((enemy, enemyIndex) => {
+                    const dx = enemy.x + enemy.width / 2 - blackhole.x;
+                    const dy = enemy.y + enemy.height / 2 - blackhole.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < blackhole.radius) {
+                        // 创建爆炸效果
+                        createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+                        
+                        // 移除敌人并增加分数
+                        enemies.splice(enemyIndex, 1);
+                        delete lastEnemyShot[enemyIndex];
+                        score += enemy.score;
+                        updateScore();
+                    }
+                });
+                
+                // 摧毁范围内的所有敌人炮弹
+                enemyBullets.forEach((bullet, bulletIndex) => {
+                    const dx = bullet.x + bullet.width / 2 - blackhole.x;
+                    const dy = bullet.y + bullet.height / 2 - blackhole.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < blackhole.radius) {
+                        // 创建小型爆炸效果
+                        createExplosion(bullet.x + bullet.width / 2, bullet.y + bullet.height / 2);
+                        
+                        // 移除炮弹
+                        enemyBullets.splice(bulletIndex, 1);
+                    }
+                });
+            });
+            
+            // 移除不活跃的黑洞
+            activeBlackholes = activeBlackholes.filter(blackhole => blackhole.active);
+        }
+        
+
+        // 开始游戏
+        function startGame() {
+            // 重置游戏状态
+            gameRunning = true;
+            gameTime = 0;
+            score = 0; // 重置分数
+            scoreDisplay.textContent = score; // 更新分数显示
+            lastEnemySpawn = 0;
+            lastPlayerShot = 0;
+            lastEnemyShot = {}; // 重置每个敌人的射击冷却时间
+            lastPowerupSpawn = 0;
+            lastEnemyCountIncrease = 0; // 重置敌人数量增加计时器
+            enemies = [];
+            playerBullets = [];
+            enemyBullets = [];
+            powerups = [];
+            blackholeMissiles = [];
+            activeBlackholes = []; // 重置活跃黑洞
+            invincibility.active = false; // 重置无敌状态
+            
+            // 重置玩家升级系统
+            playerHealth = 3; // 初始血量3点
+            maxPlayerHealth = 3; // 最大血量
+            bulletDamage = 1; // 基础炮弹伤害
+            bulletCount = 1; // 基础炮弹数量
+            playerLevel = 1; // 重置玩家等级
+            playerEnergy = 0; // 重置能量值
+            baseMaxPlayerEnergy = 10; // 重置基础能量上限
+            maxPlayerEnergy = baseMaxPlayerEnergy; // 重置当前能量上限
+            
+            // 重置护盾系统
+            playerShield = 2; // 初始护盾值
+            maxPlayerShield = 2; // 最大护盾值
+            shieldCooldown = 0; // 护盾冷却时间
+            upgradeTimesReached = []; // 已达到的升级时间点
+            upgradePending = false; // 是否有待处理的升级
+            
+            // 重置敌人最大数量
+            maxEnemyCount = 7; // 初始最大敌人数量为7个
+            
+            // 重置Boss战相关变量
+            bossActive = false;
+            bossHealth = 0;
+            bossMaxHealth = 20; // 第一次Boss血量为20点
+            bossStartTime = 0;
+            bossFightTriggered = false; // 标记Boss战是否已触发
+            bossFightRound = 0; // Boss战轮数
+            nextBossTime = 30; // 下次Boss出现时间（秒）
+            
+            // 移除升级界面（如果存在）
+            const upgradeScreen = document.getElementById('upgrade-screen');
+            if (upgradeScreen) {
+                upgradeScreen.remove();
+            }
+            activeBlackholes = []; // 重置活跃黑洞
+            
+            // 重置玩家状态
+            playerPowerup.active = false;
+            playerPowerup.type = null;
+            laser.active = false;
+            shield.active = false;
+            
+            // 重置玩家位置
+            player.x = canvas.width / 2 - player.width / 2;
+            player.y = canvas.height - 80;
+            
+            // 隐藏开始界面
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+            
+            // 启动游戏循环
+            lastTime = 0;
+            // 确保清除任何现有的游戏循环
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            animationFrameId = requestAnimationFrame(gameLoop);
+            
+            // 清除之前的计时器（如果存在）
+            if (gameTimer) {
+                clearInterval(gameTimer);
+            }
+            
+            // 启动计时器
+            gameTimer = setInterval(() => {
+                gameTime += 1;
+                updateTimer();
+            }, 1000);
+        }
+        
+
+        // 更新分数显示，确保分数始终是有效数字
+        function updateScore() {
+            // 确保score是有效数字
+            score = Number(score) || 0;
+            if (scoreDisplay) {
+                scoreDisplay.textContent = Math.floor(score);
+            }
+        }
+        
+        // 增加敌人最大数量
+        function increaseEnemyCount() {
+            maxEnemyCount += 3; // 每次增加3个敌机上限
+                
+            // 立即生成3架普通敌机
+            for (let i = 0; i < 3; i++) {
+                // 延迟生成，避免敌机重叠
+                setTimeout(() => {
+                    spawnSpecificEnemy('normal');
+                }, i * 500);
+            }
+                
+            // 显示敌人数量增加的提示
+            showEnemyReinforcementNotification();
+        }
+        
+
+        // 显示敌方增援提示
+        function showEnemyReinforcementNotification() {
+            const notification = document.createElement('div');
+            notification.className = 'fixed inset-0 flex items-center justify-center z-50 pointer-events-none';
+            notification.innerHTML = `
+                <div class="text-center p-6 max-w-lg bg-dark/90 rounded-xl border border-red-500/50 shadow-xl shadow-red-500/20">
+                    <div class="text-4xl md:text-5xl font-bold text-red-500 mb-3 animate-pulse">
+                        <i class="fa fa-exclamation-triangle mr-2"></i>敌方增援！
+                    </div>
+                    <h3 class="text-2xl md:text-3xl font-bold text-white mb-3">敌军呼叫增援！</h3>
+                    <p class="text-lg text-gray-300 mb-4">太空海盗增援部队已到达战场，准备迎战更多敌机！</p>
+                    <div class="bg-red-500/20 p-3 rounded-lg inline-block">
+                        <p class="text-gray-400">敌机上限增加</p>
+                        <p class="text-2xl font-bold text-red-500">+3</p>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // 3秒后移除通知
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transition = 'opacity 0.5s ease-out';
+                setTimeout(() => {
+                    notification.remove();
+                }, 500);
+            }, 3000);
+        }
+        
+
+        // 检查是否需要升级
+        function checkForUpgrades() {
+            // 移除时间自动升级，现在只有击败Boss后才能升级
+            // 检查游戏胜利条件已移至Boss战逻辑中
+        }
+        
+
+        // 显示升级界面
+        function showUpgradeScreen() {
+            upgradePending = true;
+            gameRunning = false; // 暂停游戏
+            
+            // 创建升级界面
+            const upgradeScreen = document.createElement('div');
+            upgradeScreen.id = 'upgrade-screen';
+            upgradeScreen.className = 'absolute inset-0 game-over-overlay flex items-center justify-center z-30';
+            upgradeScreen.innerHTML = `
+                <div class="bg-dark/80 p-8 rounded-xl border border-primary/50 shadow-xl max-w-md w-full">
+                    <h2 class="text-3xl font-bold text-primary text-center mb-4">升级机会！</h2>
+                    <p class="text-light text-center mb-6">选择一项升级来强化你的战机</p>
+                    
+                    <div class="grid grid-cols-1 gap-4 mb-6">
+                        ${upgradeOptions.map(option => `
+                            <button class="upgrade-option p-4 rounded-lg border border-gray-700 hover:border-${option.id === 'energy' ? 'yellow' : option.id === 'damage' ? 'red' : 'blue'}-500 transition-all flex items-center justify-between" data-upgrade="${option.id}">
+                                <div class="flex items-center">
+                                    <div class="w-10 h-10 rounded-full flex items-center justify-center mr-3" style="background-color: ${option.color}30; color: ${option.color}">
+                                        <i class="fa ${option.icon} text-xl"></i>
+                                    </div>
+                                    <div class="text-left">
+                                        <h3 class="font-bold text-white">${option.name}</h3>
+                                        <p class="text-sm text-gray-400">${option.description}</p>
+                                    </div>
+                                </div>
+                                <i class="fa fa-chevron-right text-gray-500"></i>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            document.querySelector('.relative').appendChild(upgradeScreen);
+            
+            // 添加点击事件
+            upgradeScreen.querySelectorAll('.upgrade-option').forEach(button => {
+                button.addEventListener('click', () => {
+                    // 立即禁用所有升级按钮，防止重复点击
+                    upgradeScreen.querySelectorAll('.upgrade-option').forEach(btn => {
+                        btn.disabled = true;
+                        btn.classList.add('opacity-50', 'cursor-not-allowed');
+                    });
+                    
+                    const upgradeId = button.dataset.upgrade;
+                    applyUpgrade(upgradeId);
+                    upgradePending = false;
+                    
+                    // 立即移除升级界面并恢复游戏
+                    upgradeScreen.remove();
+                    
+                    // 立即恢复游戏，不使用setTimeout避免卡顿
+                    gameRunning = true;
+                    // 确保清除任何现有的游戏循环
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                    }
+                    // 重新开始游戏循环
+                    lastTime = 0;
+                    animationFrameId = requestAnimationFrame(gameLoop);
+                });
+            });
+        }
+        
+
+        // 应用升级
+        function applyUpgrade(upgradeId) {
+            // 每次升级时提升玩家等级
+            playerLevel++;
+            // 更新能量条上限（每升一级提升40%）
+            maxPlayerEnergy = Math.round(baseMaxPlayerEnergy * Math.pow(1.4, playerLevel - 1));
+            console.log(`玩家升级到等级 ${playerLevel}，能量条上限提升到 ${maxPlayerEnergy}`);
+            
+            switch (upgradeId) {
+                case 'energy':
+                    if (maxPlayerHealth < 4) { // 最大血量4
+                        maxPlayerHealth++;
+                    }
+                    break;
+                case 'damage':
+                    if (bulletDamage < 3) { // 最大伤害3
+                        bulletDamage++;
+                    }
+                    break;
+                case 'armament':
+                    if (bulletCount < 3) { // 最大炮弹数3
+                        bulletCount++;
+                    }
+                    break;
+            }
+            
+            // 升级时清空场上所有炮弹和敌人
+            clearAllProjectilesAndEnemies();
+            
+            // 激活无敌时间
+            activateInvincibility(5); // 5秒无敌时间
+            
+            // 显示升级效果提示
+            showUpgradeNotification(upgradeId);
+        }
+        
+
+        // 清空场上所有炮弹和敌人
+        function clearAllProjectilesAndEnemies() {
+            // 创建清空效果动画
+            createClearEffect();
+            
+            // 清空敌人
+            enemies.forEach(enemy => {
+                // 为每个敌人创建爆炸效果
+                createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+            });
+            
+            // 清空所有敌人并重置相关状态
+            enemies = [];
+            lastEnemyShot = {};
+            
+            // 清空所有炮弹
+            playerBullets = [];
+            enemyBullets = [];
+            
+            // 清空黑洞导弹和活跃黑洞
+            blackholeMissiles = [];
+            activeBlackholes.forEach(blackhole => {
+                const blackholeElement = document.getElementById(`blackhole-${activeBlackholes.indexOf(blackhole)}`);
+                if (blackholeElement) {
+                    blackholeElement.remove();
+                }
+            });
+            activeBlackholes = [];
+        }
+        
+
+        // 创建清空效果动画
+        function createClearEffect() {
+            const clearEffect = document.createElement('div');
+            clearEffect.className = 'absolute inset-0 z-40 pointer-events-none';
+            clearEffect.innerHTML = `
+                <div class="absolute inset-0 bg-primary/20 backdrop-blur-sm"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="text-4xl font-bold text-white text-shadow animate-pulse">
+                        <i class="fa fa-refresh fa-spin mr-2"></i>变身无敌帧！小子！
+                    </div>
+                </div>
+            `;
+            
+            document.querySelector('.relative').appendChild(clearEffect);
+            
+            // 2秒后移除效果
+            setTimeout(() => {
+                clearEffect.style.opacity = '0';
+                clearEffect.style.transition = 'opacity 0.5s ease-out';
+                setTimeout(() => {
+                    clearEffect.remove();
+                }, 500);
+            }, 2000);
+        }
+        
+
+        // 显示升级效果提示
+        function showUpgradeNotification(upgradeId) {
+            const option = upgradeOptions.find(opt => opt.id === upgradeId);
+            if (!option) return;
+            
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-dark/90 border-l-4 p-4 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
+            notification.style.borderLeftColor = option.color;
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center mr-3" style="background-color: ${option.color}30; color: ${option.color}">
+                        <i class="fa ${option.icon}"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-white">升级已应用</h4>
+                        <p class="text-sm text-gray-300">${option.description}</p>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // 显示动画
+            setTimeout(() => {
+                notification.classList.remove('translate-x-full');
+            }, 100);
+            
+            // 3秒后隐藏
+            setTimeout(() => {
+                notification.classList.add('translate-x-full');
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 3000);
+        }
+        
+
+        // 激活无敌状态
+        function activateInvincibility(duration) {
+            invincibility.active = true;
+            invincibility.startTime = gameTime;
+            invincibility.duration = duration;
+        }
+        
+
+        // 更新无敌状态
+        function updateInvincibility() {
+            if (invincibility.active && gameTime - invincibility.startTime > invincibility.duration) {
+                invincibility.active = false;
+            }
+        }
+        
+
+        // 绘制无敌效果
+        function drawInvincibilityEffect() {
+            // 绘制闪烁的护盾效果
+            const alpha = 0.3 + 0.2 * Math.sin(gameTime * 10); // 闪烁效果
+            ctx.beginPath();
+            ctx.arc(player.x + player.width / 2, player.y + player.height / 2, player.width * 0.8, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`; // 金色半透明
+            ctx.fill();
+            
+            // 添加发光效果
+            ctx.strokeStyle = 'rgba(255, 215, 0, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            // 绘制无敌剩余时间
+            const remainingTime = Math.max(0, invincibility.duration - (gameTime - invincibility.startTime));
+            const timeText = `无敌: ${remainingTime.toFixed(1)}s`;
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(canvas.width - 120, 10, 110, 30);
+            
+            ctx.fillStyle = 'gold';
+            ctx.font = '14px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(timeText, canvas.width - 65, 30);
+        }
+        
+
+        // 绘制玩家血量
+        function drawPlayerHealth() {
+            const healthBarWidth = 100;
+            const healthBarHeight = 10;
+            const healthBarX = 10;
+            const healthBarY = 10;
+            
+            // 背景
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+            
+            // 血量
+            const healthPercentage = playerHealth / maxPlayerHealth;
+            ctx.fillStyle = healthPercentage > 0.5 ? '#10B981' : healthPercentage > 0.25 ? '#F59E0B' : '#EF4444';
+            ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercentage, healthBarHeight);
+            
+            // 血量文本
+            ctx.fillStyle = 'white';
+            ctx.font = '12px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${playerHealth}/${maxPlayerHealth}`, healthBarX + healthBarWidth / 2, healthBarY + healthBarHeight - 2);
+        }
+        
+        // 绘制玩家能量条
+        function drawPlayerEnergy() {
+            // 动态计算能量条宽度，基于最大能量值
+            const baseEnergyBarWidth = 100;
+            const energyBarWidth = baseEnergyBarWidth + (maxPlayerEnergy - baseMaxPlayerEnergy) * 2;
+            const energyBarHeight = 12;
+            const energyBarX = 10;
+            const energyBarY = 25; // 在血量条下方
+            
+            // 背景
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(energyBarX, energyBarY, energyBarWidth, energyBarHeight);
+            
+            // 能量
+            const energyPercentage = playerEnergy / maxPlayerEnergy;
+            ctx.fillStyle = '#F59E0B'; // 黄色能量条
+            ctx.fillRect(energyBarX, energyBarY, energyBarWidth * energyPercentage, energyBarHeight);
+            
+            // 能量文本
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 12px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${playerEnergy}/${maxPlayerEnergy}`, energyBarX + energyBarWidth / 2, energyBarY + energyBarHeight - 2);
+            
+            // 在能量条上方显示玩家等级
+            ctx.fillStyle = '#3B82F6'; // 蓝色等级文字
+            ctx.font = 'bold 10px Inter, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(`等级: ${playerLevel}`, energyBarX, energyBarY - 2);
+        }
+        
+        // 绘制玩家护盾
+        function drawPlayerShield() {
+            const shieldBarWidth = 100;
+            const shieldBarHeight = 8;
+            const shieldBarX = 10;
+            const shieldBarY = 42; // 在能量条下方
+            
+            // 背景
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(shieldBarX, shieldBarY, shieldBarWidth, shieldBarHeight);
+            
+            // 护盾值
+            const shieldPercentage = playerShield / maxPlayerShield;
+            ctx.fillStyle = '#60A5FA'; // 蓝色护盾条
+            ctx.fillRect(shieldBarX, shieldBarY, shieldBarWidth * shieldPercentage, shieldBarHeight);
+            
+            // 护盾文本
+            ctx.fillStyle = 'white';
+            ctx.font = '10px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${playerShield}/${maxPlayerShield}`, shieldBarX + shieldBarWidth / 2, shieldBarY + shieldBarHeight - 1);
+            
+            // 如果护盾在冷却中，显示冷却进度
+            if (shieldCooldown > 0) {
+                const cooldownPercentage = shieldCooldown / SHIELD_COOLDOWN_TIME;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fillRect(shieldBarX, shieldBarY, shieldBarWidth * cooldownPercentage, shieldBarHeight);
+                
+                // 冷却时间文本
+                ctx.fillStyle = '#F87171'; // 红色冷却文字
+                ctx.font = '8px Inter, sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText(`${shieldCooldown.toFixed(1)}s`, shieldBarX + shieldBarWidth - 2, shieldBarY + shieldBarHeight - 1);
+            }
+        }
+        
+        // 显示护盾破碎效果
+        function showShieldBreakEffect() {
+            // 创建护盾破碎动画
+            const shieldBreakEffect = document.createElement('div');
+            shieldBreakEffect.className = 'fixed inset-0 flex items-center justify-center z-40 pointer-events-none';
+            shieldBreakEffect.innerHTML = `
+                <div class="relative w-40 h-40">
+                    <div class="absolute inset-0 border-4 border-blue-500 rounded-full animate-shield-break"></div>
+                    <div class="absolute inset-2 border-2 border-blue-400 rounded-full animate-shield-break-delay"></div>
+                </div>
+            `;
+            
+            // 添加动画样式
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes shieldBreak {
+                    0% { transform: scale(1); opacity: 1; }
+                    100% { transform: scale(1.5); opacity: 0; }
+                }
+                @keyframes shieldBreakDelay {
+                    0% { transform: scale(1); opacity: 1; }
+                    50% { transform: scale(1.2); opacity: 0.7; }
+                    100% { transform: scale(1.5); opacity: 0; }
+                }
+                .animate-shield-break {
+                    animation: shieldBreak 0.5s forwards;
+                }
+                .animate-shield-break-delay {
+                    animation: shieldBreakDelay 0.7s forwards;
+                }
+            `;
+            document.head.appendChild(style);
+            
+            document.body.appendChild(shieldBreakEffect);
+            
+            // 1秒后移除效果
+            setTimeout(() => {
+                shieldBreakEffect.remove();
+                style.remove();
+            }, 1000);
+        }
+        
+        // 更新护盾冷却
+        function updateShieldCooldown(deltaTime) {
+            if (shieldCooldown > 0) {
+                shieldCooldown -= deltaTime;
+                
+                if (shieldCooldown <= 0) {
+                    // 冷却结束，恢复一点护盾值（如果未达到最大值）
+                    if (playerShield < maxPlayerShield) {
+                        playerShield++;
+                        showShieldRechargeEffect();
+                        
+                        // 如果还有护盾可以恢复，重新开始冷却计时
+                        if (playerShield < maxPlayerShield) {
+                            shieldCooldown = SHIELD_COOLDOWN_TIME;
+                        } else {
+                            shieldCooldown = 0; // 已经达到最大护盾值，停止冷却
+                        }
+                    } else {
+                        shieldCooldown = 0; // 已经达到最大护盾值，停止冷却
+                    }
+                }
+            }
+        }
+        
+        // 显示护盾恢复效果
+        function showShieldRechargeEffect() {
+            const rechargeEffect = document.createElement('div');
+            rechargeEffect.className = 'fixed top-1/4 left-4 transform -translate-x-full transition-transform duration-500 ease-out z-50';
+            rechargeEffect.innerHTML = `
+                <div class="bg-blue-900/90 border-l-4 border-blue-500 p-3 rounded-lg shadow-lg">
+                    <div class="flex items-center">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center mr-2 bg-blue-500/30 text-blue-500">
+                            <i class="fa fa-shield"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-white">护盾恢复</h4>
+                            <p class="text-xs text-gray-300">护盾值 +1</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(rechargeEffect);
+            
+            // 显示动画
+            setTimeout(() => {
+                rechargeEffect.classList.remove('-translate-x-full');
+            }, 100);
+            
+            // 2秒后隐藏
+            setTimeout(() => {
+                rechargeEffect.classList.add('-translate-x-full');
+                setTimeout(() => {
+                    rechargeEffect.remove();
+                }, 500);
+            }, 2000);
+        }
+        
+
+        // 游戏胜利
+        function gameVictory() {
+            gameRunning = false;
+            clearInterval(gameTimer);
+            
+            // 重置道具效果
+            playerPowerup.active = false;
+            playerPowerup.type = null;
+            laser.active = false;
+            shield.active = false;
+            
+            // 显示最终时间
+            const seconds = Math.floor(gameTime);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            
+            const timeString = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+            
+            // 创建胜利界面
+            const victoryScreen = document.createElement('div');
+            victoryScreen.id = 'victory-screen';
+            victoryScreen.className = 'absolute inset-0 game-over-overlay flex items-center justify-center z-30';
+            victoryScreen.innerHTML = `
+                <div class="bg-dark/80 p-8 rounded-xl border border-green-500/50 shadow-xl max-w-md w-full">
+                    <div class="text-center mb-6">
+                        <div class="inline-block p-4 rounded-full bg-green-500/20 mb-4">
+                            <i class="fa fa-trophy text-5xl text-green-500"></i>
+                        </div>
+                        <h2 class="text-4xl font-bold text-green-500 mb-2">游戏胜利！</h2>
+                        <p class="text-xl text-light">恭喜你成功穿越宇宙海盗基地！</p>
+                    </div>
+                    
+                    <div class="space-y-4 mb-8">
+                        <div class="bg-dark/50 p-4 rounded-lg">
+                            <p class="text-light mb-1">生存时间</p>
+                            <p class="text-2xl font-bold text-green-500">${timeString}</p>
+                        </div>
+                        
+                        <div class="bg-dark/50 p-4 rounded-lg">
+                            <p class="text-light mb-1">获得分数</p>
+                            <p class="text-2xl font-bold text-green-500">${score}</p>
+                        </div>
+                        
+                        <div class="bg-dark/50 p-4 rounded-lg">
+                            <p class="text-light mb-1">最终属性</p>
+                            <div class="grid grid-cols-3 gap-2 mt-2">
+                                <div class="text-center">
+                                    <p class="text-sm text-gray-400">血量</p>
+                                    <p class="font-bold text-white">${playerHealth}/${maxPlayerHealth}</p>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-sm text-gray-400">伤害</p>
+                                    <p class="font-bold text-white">${bulletDamage}</p>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-sm text-gray-400">炮弹</p>
+                                    <p class="font-bold text-white">${bulletCount}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button id="victory-restart-button" class="w-full py-3 px-6 bg-green-500 hover:bg-green-600 text-white font-bold rounded-lg text-lg transition-all">
+                        再次挑战
+                    </button>
+                </div>
+            `;
+            
+            document.querySelector('.relative').appendChild(victoryScreen);
+            
+            // 添加重新开始按钮事件
+            document.getElementById('victory-restart-button').addEventListener('click', () => {
+                victoryScreen.remove();
+                startGame();
+            });
+        }
+        
+        // 检查积分奖励
+        function checkScoreReward() {
+            const SCORE_REWARD_THRESHOLD = 30; // 每30点积分获得一次奖励
+            
+            // 确保score是有效数字
+            score = Number(score) || 0;
+            
+            // 检查是否达到奖励阈值
+            if (score - lastScoreReward >= SCORE_REWARD_THRESHOLD) {
+                // 更新上次奖励的分数，使用当前分数的整数部分
+                lastScoreReward = Math.floor(score);
+                
+                // 显示积分奖励提示
+                showScoreRewardNotification();
+                
+                // 立即在原地触发黑洞爆炸效果
+                activateBlackholeEffect(player.x + player.width / 2, player.y + player.height / 2);
+                
+                // 激活3秒斜向攻击增益
+                activateScoreRewardPowerup();
+            }
+        }
+        
+        // 显示积分奖励提示
+        function showScoreRewardNotification() {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-dark/90 border-l-4 border-purple-500 p-4 rounded-lg shadow-lg z-50 text-center';
+            notification.innerHTML = `
+                <div class="flex flex-col items-center">
+                    <div class="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-purple-500/30 text-purple-500">
+                        <i class="fa fa-trophy text-3xl"></i>
+                    </div>
+                    <h4 class="text-xl font-bold text-white mb-2">积分奖励！</h4>
+                    <p class="text-gray-300">获得20点积分，释放黑洞导弹！</p>
+                    <p class="text-gray-300 mt-2">获得3秒斜向攻击增益</p>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // 1.5秒后移除通知
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transition = 'opacity 0.3s ease-out';
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 1500);
+        }
+        
+        // 激活积分奖励的斜向攻击增益
+        function activateScoreRewardPowerup() {
+            // 设置道具效果
+            playerPowerup.active = true;
+            playerPowerup.type = 'diagonal';
+            playerPowerup.startTime = gameTime;
+            playerPowerup.duration = 3; // 3秒持续时间
+            
+            // 显示道具激活效果
+            const effect = document.createElement('div');
+            effect.className = 'fixed inset-0 flex items-center justify-center z-40 pointer-events-none';
+            effect.innerHTML = `
+                <div class="text-3xl font-bold text-green-500 text-shadow animate-pulse">
+                    <i class="fa fa-bolt mr-2"></i>斜向攻击激活！
+                </div>
+            `;
+            
+            document.body.appendChild(effect);
+            
+            // 1秒后移除效果
+            setTimeout(() => {
+                effect.style.opacity = '0';
+                effect.style.transition = 'opacity 0.5s ease-out';
+                setTimeout(() => {
+                    effect.remove();
+                }, 500);
+            }, 1000);
+        }
+        
+        // 触发能量爆发
+        function triggerEnergyBurst() {
+            // 重置能量值
+            playerEnergy = 0;
+            
+            // 显示能量爆发提示
+            showEnergyBurstNotification();
+            
+            // 激活3秒护盾
+            shield.active = true;
+            shield.x = player.x + player.width / 2;
+            shield.y = player.y + player.height / 2;
+            shield.radius = player.width * 0.7;
+            
+            // 激活3秒斜向攻击
+            playerPowerup.active = true;
+            playerPowerup.type = 'diagonal';
+            playerPowerup.startTime = gameTime;
+            playerPowerup.duration = 3;
+            
+            // 在原地触发黑洞爆炸效果
+            activateBlackholeEffect(player.x + player.width / 2, player.y + player.height / 2);
+        }
+        
+        // 显示能量爆发提示
+        function showEnergyBurstNotification() {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-dark/90 border-l-4 border-yellow-500 p-4 rounded-lg shadow-lg z-50 text-center';
+            notification.innerHTML = `
+                <div class="flex flex-col items-center">
+                    <div class="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-yellow-500/30 text-yellow-500">
+                        <i class="fa fa-bolt text-3xl"></i>
+                    </div>
+                    <h4 class="text-xl font-bold text-white mb-2">能量爆发！</h4>
+                    <p class="text-gray-300">获得3秒护盾和斜向攻击！</p>
+                    <p class="text-gray-300 mt-2">触发黑洞爆炸清场！</p>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // 2秒后移除通知
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transition = 'opacity 0.3s ease-out';
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 2000);
+        }
+
+        // 游戏结束
+        function gameOver() {
+            gameRunning = false;
+            clearInterval(gameTimer);
+            
+            // 重置道具效果
+            playerPowerup.active = false;
+            playerPowerup.type = null;
+            laser.active = false;
+            shield.active = false;
+            
+            // 显示最终时间
+            const seconds = Math.floor(gameTime);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            
+            const timeString = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+            document.getElementById('final-time').textContent = timeString;
+            
+            // 显示最终分数
+            document.getElementById('final-score').textContent = score;
+            
+            // 显示游戏结束界面
+            document.getElementById('game-over-screen').classList.remove('hidden');
+        }
+        
+
+        // 更新玩家等级和能量条上限
+        function updatePlayerLevel(newLevel) {
+            playerLevel = newLevel;
+            // 每升一级，能量条上限提升40%
+            maxPlayerEnergy = Math.round(baseMaxPlayerEnergy * Math.pow(1.4, playerLevel - 1));
+            console.log(`玩家升级到等级 ${playerLevel}，能量条上限提升到 ${maxPlayerEnergy}`);
+        }
+
+        // 初始化
+        function init() {
+            createStars();
+            
+            // 预加载图片
+            player.image.onload = function() {
+                console.log('Player image loaded');
+            };
+            
+            enemyImages.normal.onload = function() {
+                console.log('Normal enemy image loaded');
+            };
+            
+            enemyImages.level1.onload = function() {
+                console.log('Level 1 enemy image loaded');
+            };
+            
+            enemyImages.level2.onload = function() {
+                console.log('Level 2 enemy image loaded');
+            };
+            
+            backgroundImage.onload = function() {
+                console.log('Background image loaded');
+                // 初始绘制
+                drawGame();
+            };
+            
+            // 设置初始鼠标位置
+            mouseX = canvas.width / 2;
+            mouseY = canvas.height / 2;
+        }
+        
+
+        // 直接绑定按钮事件，不依赖init函数
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, binding events...');
+            const startBtn = document.getElementById('start-button');
+            const restartBtn = document.getElementById('restart-button');
+            
+            console.log('Start button element:', startBtn);
+            console.log('Restart button element:', restartBtn);
+            
+            if (startBtn) {
+                startBtn.addEventListener('click', function() {
+                    console.log('Start button clicked!');
+                    startGame();
+                });
+            }
+            
+            if (restartBtn) {
+                restartBtn.addEventListener('click', function() {
+                    console.log('Restart button clicked!');
+                    startGame();
+                });
+            }
+        });
+        
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+            
+            // 初始化lastTime
+            if (lastTime === 0) {
+                lastTime = timestamp;
+            }
+            
+            const deltaTime = (timestamp - lastTime) / 1000; // 转换为秒
+            lastTime = timestamp;
+            
+            updateGame(deltaTime);
+            updateShieldCooldown(deltaTime);
+            drawGame();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // 检查Boss血量阈值
+        function checkBossHealthThreshold() {
+            // 计算Boss血量的1/3和2/3阈值
+            const oneThirdHealth = bossMaxHealth * (1/3);
+            const twoThirdsHealth = bossMaxHealth * (2/3);
+            
+            // 检查是否剩余2/3血量
+            if (bossHealth <= twoThirdsHealth && !bossHealthThresholds.twoThirds) {
+                bossHealthThresholds.twoThirds = true;
+                
+                // 触发无敌效果
+                boss.isInvincible = true;
+                boss.invincibilityEndTime = gameTime + 5; // 5秒无敌时间
+                
+                // 显示Boss进入无敌状态的提示
+                showTopRightNotification('Boss护盾激活！', 'fa-shield', '#9333EA'); // 紫色
+                
+                // 召唤援军
+                spawnBossReinforcements();
+            }
+            
+            // 检查是否剩余1/3血量
+            if (bossHealth <= oneThirdHealth && !bossHealthThresholds.oneThird) {
+                bossHealthThresholds.oneThird = true;
+                
+                // 触发无敌效果
+                boss.isInvincible = true;
+                boss.invincibilityEndTime = gameTime + 5; // 5秒无敌时间
+                
+                // 显示Boss进入无敌状态的提示
+                showTopRightNotification('Boss护盾激活！', 'fa-shield', '#9333EA'); // 紫色
+                
+                // 召唤援军
+                spawnBossReinforcements();
+            }
+        }
+        
+        // 召唤Boss援军
+        function spawnBossReinforcements() {
+            // 根据Boss战轮数决定增援数量
+            const reinforcementCount = 3 + bossFightRound;
+            
+            // 生成增援敌机
+            for (let i = 0; i < reinforcementCount; i++) {
+                // 延迟生成，避免敌机重叠
+                setTimeout(() => {
+                    // 随机选择敌机类型，随着轮数增加，高级敌机概率增加
+                    let enemyType = 'normal';
+                    if (Math.random() < 0.3 + (bossFightRound * 0.1)) {
+                        enemyType = Math.random() < 0.5 ? 'level1' : 'level2';
+                    }
+                    
+                    // 在屏幕两侧随机位置生成敌机
+                    const x = Math.random() < 0.5 ? -50 : canvas.width + 50;
+                    const y = Math.random() * (canvas.height / 2);
+                    
+                    enemies.push({
+                        x: x,
+                        y: y,
+                        width: enemyType === 'normal' ? 40 : (enemyType === 'level1' ? 50 : 60),
+                        height: enemyType === 'normal' ? 30 : (enemyType === 'level1' ? 40 : 50),
+                        speed: enemyType === 'normal' ? 2 : (enemyType === 'level1' ? 1.5 : 1),
+                        health: enemyType === 'normal' ? 1 : (enemyType === 'level1' ? 3 : 5),
+                        type: enemyType,
+                        shootCooldown: 0,
+                        lastShot: 0
+                    });
+                }, i * 300);
+            }
+        }
+        
+        // 显示右上角通知
+        function showTopRightNotification(message, icon, color) {
+            // 检查是否已存在通知容器，如果没有则创建
+            let notificationContainer = document.getElementById('notification-container');
+            if (!notificationContainer) {
+                notificationContainer = document.createElement('div');
+                notificationContainer.id = 'notification-container';
+                notificationContainer.className = 'fixed top-4 right-4 z-50 flex flex-col gap-2 items-end';
+                document.body.appendChild(notificationContainer);
+            }
+            
+            // 创建新通知
+            const notification = document.createElement('div');
+            notification.className = `bg-dark/90 text-white px-4 py-2 rounded-lg shadow-lg border-l-4 transform transition-all duration-300 translate-x-full opacity-0`;
+            notification.style.borderLeftColor = color;
+            
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fa ${icon} mr-2" style="color: ${color}"></i>
+                    <span class="font-bold">${message}</span>
+                </div>
+            `;
+            
+            // 添加到容器
+            notificationContainer.appendChild(notification);
+            
+            // 显示通知
+            setTimeout(() => {
+                notification.classList.remove('translate-x-full', 'opacity-0');
+            }, 10);
+            
+            // 3秒后隐藏通知
+            setTimeout(() => {
+                notification.classList.add('opacity-0', 'translate-x-full');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+        // 启动游戏
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
